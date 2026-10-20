@@ -200,6 +200,13 @@ sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
 
 <!-- ───────── 2 ───────── -->
 <h2 id="s2">2. 세 개의 멱법칙: L(N), L(D), L(C)</h2>
+<p>세 글자는 모델을 키울 때 늘릴 수 있는 세 가지 자원입니다.</p>
+<ul>
+  <li><strong>N (모델 크기)</strong>: 모델이 가진 파라미터(가중치) 수. 많을수록 더 많은 패턴을 담을 수 있습니다.</li>
+  <li><strong>D (데이터 양)</strong>: 학습에 쓴 텍스트의 양을 토큰 수로 센 값. 토큰은 단어나 단어 조각 하나쯤입니다.</li>
+  <li><strong>C (연산량)</strong>: 학습에 쓴 계산의 총량. 대략 N × D에 비례하고(7절), GPU를 얼마나 오래 돌렸는지, 곧 비용입니다. 단위 PF-days는 초당 10<sup>15</sup>번 연산하는 컴퓨터를 하루 돌린 양입니다.</li>
+</ul>
+<p>L(N)은 “loss를 N의 함수로 본 것”이라는 뜻이고, L(D), L(C)도 같습니다.</p>
 <p>논문은 WebText2(약 230억 토큰, BPE 어휘 50,257개)에서 디코더 Transformer를 학습시키고, 1,024토큰 문맥에서 평균한 교차 엔트로피(nats)<sup class="fn" id="fnref1"><a href="#fn1">1</a></sup>를 성능 지표로 씁니다. 세 요인 중 <strong>나머지 둘이 병목이 아닐 때</strong> loss는 각각에 대해 멱법칙을 따릅니다.</p>
 <div class="eq">
   $$L(N) = \left(\frac{N_c}{N}\right)^{\alpha_N},\quad \alpha_N \approx 0.076,\; N_c \approx 8.8\times10^{13}$$
