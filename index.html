@@ -150,7 +150,7 @@ sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
 <header class="hero">
   <p class="kicker">스케일링 법칙 · Kaplan et al. (2020) · arXiv:2001.08361</p>
   <h1>Scaling Laws — 학습하기 전에 loss를 계산한다</h1>
-  <p class="sub">2020년 1월 OpenAI의 Kaplan 등은 크기가 768개부터 15억 개까지인 Transformer 언어 모델을 데이터와 연산을 바꿔 가며 학습시키고, 테스트 loss가 <strong>모델 크기 N, 데이터 D, 연산 C</strong> 각각에 대해 한 줄짜리 멱법칙을 따른다는 것을 보였습니다. 추세는 연산으로 여덟 자릿수, 모델 크기로 여섯 자릿수에 걸쳐 휘지 않았습니다. 이 논문이 투자의 근거가 된 이유는 “크면 좋다”가 아니라 <strong>“얼마나 좋아질지 미리 계산할 수 있다”</strong>는 데 있습니다. 이 페이지는 논문의 식과 표에 실린 숫자를 그대로 넣어 그 계산을 브라우저에서 해 보고, 2년 뒤 Chinchilla가 같은 계산의 결론을 어떻게 뒤집었는지까지 따라갑니다. 본문에 나오는 “그림 5”, “식 (1.1)”, “표 5”, “3절” 같은 번호는 따로 밝히지 않으면 Kaplan 논문 원문(<a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener">arXiv:2001.08361</a>)의 번호입니다.</p>
+  <p class="sub">2020년 1월 OpenAI의 Kaplan 등은 크기가 768개부터 15억 개까지인 Transformer 언어 모델을 데이터와 연산을 바꿔 가며 학습시키고, 테스트 loss가 <strong>모델 크기 N, 데이터 D, 연산 C</strong> 각각에 대해 한 줄짜리 멱법칙을 따른다는 것을 보였습니다. 추세는 연산으로 여덟 자릿수, 모델 크기로 여섯 자릿수에 걸쳐 휘지 않았습니다. 이 논문이 투자의 근거가 된 이유는 “크면 좋다”가 아니라 <strong>“얼마나 좋아질지 미리 계산할 수 있다”</strong>는 데 있습니다. 이 페이지는 논문의 식과 표에 실린 숫자를 그대로 넣어 그 계산을 브라우저에서 해 보고, 2년 뒤 Chinchilla가 같은 계산의 결론을 어떻게 뒤집었는지까지 따라갑니다.</p>
 </header>
 
 <div class="key"><span class="lbl">이 페이지의 축</span>
@@ -257,7 +257,7 @@ sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
 
 <!-- ───────── 4 ───────── -->
 <h2 id="s4">4. 크기만 중요하고 모양은 거의 상관없다</h2>
-<p>같은 파라미터 수라도 층을 깊게 쌓을 수도, 넓게 펼칠 수도 있습니다. 논문은 N을 고정한 채 층 수, 폭, 헤드 수, FFN 비율을 하나씩 바꿔 보고 loss가 넓은 범위에서 <strong>몇 % 안쪽</strong>으로만 움직인다는 것을 보였습니다. 논문 그림 5가 이 실험의 그래프로, 가로축은 바꾼 모양 값(FFN 비율, 층 수 대 폭의 비율, 헤드 크기), 세로축은 기준 모델 대비 loss 증가율입니다. 층 수 대 폭의 비율이 40배 달라져도 영향이 작았고, (층, d<sub>model</sub>) = (6, 4288)인 모델이 GPT-2의 (48, 1600)과 loss 3% 안쪽으로 맞섰습니다.</p>
+<p>같은 파라미터 수라도 층을 깊게 쌓을 수도, 넓게 펼칠 수도 있습니다. 논문은 N을 고정한 채 층 수, 폭, 헤드 수, FFN 비율을 하나씩 바꿔 보고 loss가 넓은 범위에서 <strong>몇 % 안쪽</strong>으로만 움직인다는 것을 보였습니다(그림 5). 층 수 대 폭의 비율이 40배 달라져도 영향이 작았고, (층, d<sub>model</sub>) = (6, 4288)인 모델이 GPT-2의 (48, 1600)과 loss 3% 안쪽으로 맞섰습니다.</p>
 <div class="eq">
   $$N \approx 2\,d_{\text{model}}\,n_{\text{layer}}\,(2d_{\text{attn}} + d_{\text{ff}}) = 12\,n_{\text{layer}}\,d_{\text{model}}^2$$
   <span class="note">식 (2.1). d<sub>attn</sub> = d<sub>ff</sub>/4 = d<sub>model</sub>인 표준 설정에서 편향과 LayerNorm 같은 작은 항은 뺍니다. 임베딩 (n<sub>vocab</sub> + n<sub>ctx</sub>)·d<sub>model</sub>도 N에 넣지 않습니다.</span>
