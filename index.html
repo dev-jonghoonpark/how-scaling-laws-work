@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scaling Laws — 학습하기 전에 loss를 계산한다</title>
+<meta name="description" content="Kaplan et al.(2020) 「Scaling Laws for Neural Language Models」를 브라우저에서 직접 계산하며 배우는 인터랙티브 교육 자료. L(N)·L(D)·L(C) 멱법칙, 작은 실험으로 큰 모델 외삽하기, 형태 무관성, L(N,D)와 과적합 경계, 학습 곡선과 샘플 효율, 6ND 연산 계산기, 연산 최적 배분, Chinchilla가 바꾼 배분, 멱법칙의 한계까지.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb;
+  --page:#f9f9f7;
+  --text-primary:#0b0b0b;
+  --text-secondary:#52514e;
+  --muted:#898781;
+  --grid:#e1e0d9;
+  --axis:#c3c2b7;
+  --border:rgba(11,11,11,0.10);
+  --s1:#2a78d6;
+  --s2:#eb6834;
+  --s3:#1baf7a;
+  --s4:#8b5cf6;
+  --s8:#e34948;
+  --warn:#fab219;
+  --good:#0ca30c;
+  --wash:rgba(42,120,214,0.08);
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-1:#1a1a19;
+  --page:#0d0d0d;
+  --text-primary:#ffffff;
+  --text-secondary:#c3c2b7;
+  --muted:#898781;
+  --grid:#2c2c2a;
+  --axis:#383835;
+  --border:rgba(255,255,255,0.10);
+  --s1:#3987e5;
+  --s2:#d95926;
+  --s3:#199e70;
+  --s4:#a78bfa;
+  --s8:#e66767;
+  --warn:#fab219;
+  --good:#0ca30c;
+  --wash:rgba(57,135,229,0.14);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
+body{
+  margin:0; background:var(--page); color:var(--text-primary);
+  font-family:system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  font-size:16px; line-height:1.75; letter-spacing:-0.01em;
+}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px 120px}
+header.hero{padding:56px 0 28px;border-bottom:1px solid var(--border);margin-bottom:8px}
+h1{font-size:clamp(28px,5.2vw,42px);line-height:1.25;margin:0 0 12px;letter-spacing:-0.03em}
+.sub{color:var(--text-secondary);font-size:17px;margin:0}
+.kicker{font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 10px}
+h2{font-size:clamp(21px,3.4vw,27px);margin:56px 0 6px;letter-spacing:-0.02em;line-height:1.3}
+h3{font-size:18px;margin:34px 0 6px;letter-spacing:-0.015em}
+p{margin:12px 0}
+ul,ol{margin:12px 0;padding-left:22px}
+li{margin:6px 0}
+strong{font-weight:650}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.9em;background:var(--wash);padding:1px 5px;border-radius:4px}
+a{color:var(--s1)}
+.demo{background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin:24px 0}
+.demo h4{margin:0 0 2px;font-size:15px;color:var(--text-primary);font-weight:650}
+.demo .cap{color:var(--muted);font-size:13px;margin:0 0 14px;line-height:1.6}
+canvas{display:block;width:100%;border-radius:8px;background:var(--surface-1);touch-action:manipulation}
+.ctrls{display:flex;flex-wrap:wrap;gap:14px 22px;margin:14px 0 4px;align-items:flex-end}
+.ctrl{flex:1 1 210px;min-width:170px}
+.ctrl label{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--text-secondary);margin-bottom:4px;gap:10px}
+.ctrl label b{font-variant-numeric:tabular-nums;color:var(--text-primary);font-weight:650;font-size:13px}
+input[type=range]{width:100%;accent-color:var(--s1);height:22px;margin:0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.btns.top{margin:0 0 12px}
+button{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface-1);color:var(--text-primary);transition:background .12s}
+button:hover{background:var(--wash)}
+button[aria-pressed=true]{background:var(--wash);border-color:var(--s1)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--text-secondary);margin:10px 0 0}
+.legend>span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.legend i.dot{width:9px;height:9px;border-radius:50%}
+.legend i.dash{background:none!important;border-top:2px dashed;height:0}
+.readout{display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:12px;font-size:13px;color:var(--text-secondary)}
+.readout b{display:block;font-size:19px;color:var(--text-primary);font-weight:650;line-height:1.3;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.eq{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--s1);
+  border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0;overflow-x:auto;text-align:center}
+.eq .note{display:block;font-size:12.5px;color:var(--muted);margin:6px 0 0;line-height:1.55;text-align:left}
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--border);border-radius:12px;background:var(--surface-1)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 13px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle}
+th{font-weight:650;font-size:12.5px;color:var(--text-secondary);background:var(--page)}
+tr:last-child td{border-bottom:none}
+td.num,th.num{font-variant-numeric:tabular-nums;text-align:right}
+tr.hl td{background:var(--wash);font-weight:650}
+.demo .tw{margin:12px 0 0}
+.demo table{font-size:13px}
+.demo th,.demo td{padding:6px 10px;white-space:nowrap}
+.note{border-left:3px solid var(--axis);padding:2px 0 2px 16px;margin:18px 0;color:var(--text-secondary);font-size:14.5px}
+.key{border:1px solid var(--border);border-left:3px solid var(--s2);background:var(--surface-1);
+  border-radius:0 10px 10px 0;padding:14px 18px;margin:20px 0}
+.key .lbl{font-size:11.5px;font-weight:700;letter-spacing:0.1em;color:var(--s2);display:block;margin-bottom:4px}
+.key p{margin:0}
+nav.toc{background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px 22px;margin:26px 0}
+nav.toc ol{margin:6px 0 0;padding-left:20px;font-size:14.5px}
+nav.toc a{text-decoration:none;color:var(--text-primary)}
+nav.toc a:hover{color:var(--s1)}
+.q{border:1px solid var(--border);border-radius:10px;background:var(--surface-1);padding:16px 18px;margin:14px 0}
+.q h4{margin:0 0 8px;font-size:15px;color:var(--text-primary)}
+.q .opt{display:flex;gap:9px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);
+  border-radius:8px;margin:6px 0;cursor:pointer;font-size:14px;transition:border-color .12s}
+.q .opt:hover{border-color:var(--s1)}
+.q .opt input{margin-top:5px;accent-color:var(--s1)}
+.q .opt.correct{border-color:var(--good);background:rgba(12,163,12,0.08)}
+.q .opt.wrong{border-color:var(--s8);background:rgba(227,73,72,0.07)}
+.q .expl{display:none;font-size:13.5px;color:var(--text-secondary);border-left:3px solid var(--good);
+  padding:2px 0 2px 12px;margin-top:10px;line-height:1.65}
+.q .expl.bad{border-left-color:var(--s8)}
+.q .expl.show{display:block}
+.quiz-score{font-size:15px;font-weight:700;margin-top:14px}
+.tog{position:fixed;top:14px;right:14px;z-index:10;border-radius:999px;padding:7px 13px;
+  background:var(--surface-1);border:1px solid var(--border);font-size:12.5px}
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
+footer a{color:var(--text-secondary)}
+.refs{font-size:13px;color:var(--text-secondary);line-height:1.7}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:640px){.split{grid-template-columns:1fr}}
+.split h5{margin:4px 0 6px;font-size:13px;color:var(--text-secondary);font-weight:650}
+sup.fn{font-size:0.72em;line-height:0;margin-left:1px}
+sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
+.footnotes{margin-top:64px;padding-top:18px;border-top:1px solid var(--border);font-size:14.5px;color:var(--text-secondary)}
+.footnotes h2{font-size:18px;margin:0 0 10px;color:var(--text-primary)}
+.footnotes ol{padding-left:22px}
+.footnotes li:target{background:var(--wash);border-radius:8px}
+.footnotes p{margin:10px 0}
+.footnotes .back{text-decoration:none;margin-left:4px}
+.warnbox{font-size:12.5px;color:var(--s8);margin-top:8px;min-height:1em}
+</style>
+</head>
+<body>
+<button class="tog" id="themeBtn" type="button">◐ 다크</button>
+<div class="wrap">
+<header class="hero">
+  <p class="kicker">스케일링 법칙 · Kaplan et al. (2020) · arXiv:2001.08361</p>
+  <h1>Scaling Laws — 학습하기 전에 loss를 계산한다</h1>
+  <p class="sub">2020년 1월 OpenAI의 Kaplan 등은 크기가 768개부터 15억 개까지인 Transformer 언어 모델을 데이터와 연산을 바꿔 가며 학습시키고, 테스트 loss가 <strong>모델 크기 N, 데이터 D, 연산 C</strong> 각각에 대해 한 줄짜리 멱법칙을 따른다는 것을 보였습니다. 추세는 연산으로 여덟 자릿수, 모델 크기로 여섯 자릿수에 걸쳐 휘지 않았습니다. 이 논문이 투자의 근거가 된 이유는 “크면 좋다”가 아니라 <strong>“얼마나 좋아질지 미리 계산할 수 있다”</strong>는 데 있습니다. 이 페이지는 논문의 식과 표에 실린 숫자를 그대로 넣어 그 계산을 브라우저에서 해 보고, 2년 뒤 Chinchilla가 같은 계산의 결론을 어떻게 뒤집었는지까지 따라갑니다.</p>
+</header>
+
+<div class="key"><span class="lbl">이 페이지의 축</span>
+<p><strong>loss는 규모(N, D, C)의 멱법칙이라 학습하기 전에 계산할 수 있다.</strong> 계산할 수 있으니 같은 예산을 N과 D에 어떻게 나눌지도 계산으로 정할 수 있다. 다만 그 답은 법칙을 어떻게 측정했느냐에 따라 달라졌다.</p></div>
+
+<nav class="toc">
+  <strong>학습 경로</strong>
+  <ol>
+    <li><a href="#s1">로그-로그 그래프의 직선</a></li>
+    <li><a href="#s2">세 개의 멱법칙: L(N), L(D), L(C)</a></li>
+    <li><a href="#s3">작은 실험으로 큰 모델 맞히기</a></li>
+    <li><a href="#s4">크기만 중요하고 모양은 거의 상관없다</a></li>
+    <li><a href="#s5">N과 D를 함께: 과적합의 경계</a></li>
+    <li><a href="#s6">큰 모델이 더 빨리 배운다</a></li>
+    <li><a href="#s7">연산량 세기: C ≈ 6ND</a></li>
+    <li><a href="#s8">연산 예산을 어떻게 나눌까</a></li>
+    <li><a href="#s9">Chinchilla가 바꾼 배분</a></li>
+    <li><a href="#s10">멱법칙은 어디서 멈추는가</a></li>
+    <li><a href="#s11">확인 퀴즈</a></li>
+  </ol>
+</nav>
+
+<!-- ───────── 1 ───────── -->
+<h2 id="s1">1. 로그-로그 그래프의 직선</h2>
+<p>논문의 그래프는 거의 전부 가로축과 세로축이 모두 로그입니다. 이유는 멱법칙 \(L = (N_c/N)^{\alpha}\)에 로그를 씌우면 바로 보입니다.</p>
+<div class="eq">
+  $$\log L = \alpha \log N_c \;-\; \alpha \log N$$
+  <span class="note">log N에 대한 일차식입니다. 로그-로그 축에서 멱법칙은 <strong>기울기가 −α인 직선</strong>이 되고, 직선이면 몇 점만 찍어도 그 너머를 자로 그어 늘일 수 있습니다.</span>
+</div>
+<p>멱법칙의 성질은 “N을 몇 배 하면 loss가 몇 배가 되는가”로 읽는 것이 가장 쉽습니다. N을 k배 하면 loss는 \(k^{-\alpha}\)배가 됩니다. 시작점이 어디든 같은 비율입니다. 논문은 α<sub>N</sub> ≈ 0.076을 예로 들어 “파라미터를 두 배로 하면 loss는 \(2^{-0.076} = 0.95\)배”라고 적습니다(1.2절).</p>
+
+<div class="demo">
+  <h4>데모 1 · 같은 곡선, 다른 축</h4>
+  <p class="cap">L(N) = 5 · (N / 10³)<sup>−α</sup>를 보통 축(왼쪽)과 로그-로그 축(오른쪽)에 그립니다. 주황 점은 N₀ = 10⁴와 그 k배입니다. α를 바꾸면 오른쪽 직선의 기울기만 바뀝니다.</p>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>지수 α</span> <b id="d1av"></b></label><input type="range" id="d1a" min="0.02" max="1" step="0.002" value="0.076"></div>
+    <div class="ctrl"><label><span>배수 k</span> <b id="d1kv"></b></label><input type="range" id="d1k" min="0" max="5" step="0.01" value="1"></div>
+  </div>
+  <div class="split" style="margin-top:12px">
+    <div><h5>보통 축</h5><canvas id="d1lin" height="200"></canvas></div>
+    <div><h5>로그-로그 축</h5><canvas id="d1log" height="200"></canvas></div>
+  </div>
+  <div class="readout" id="d1out"></div>
+</div>
+<p>α = 0.076에서 보통 축의 곡선은 거의 처음부터 바닥에 붙어 “더 키워 봐야 소용없다”처럼 보입니다. 로그-로그 축에서는 끝까지 같은 기울기로 내려갑니다. 두 그림은 같은 사실을 말합니다. 개선은 <strong>곱셈으로</strong> 일어나서, loss를 일정 비율 줄이는 데 드는 규모는 매번 같은 <em>배수</em>입니다. 그 배수가 크다는 것이 함정입니다. α = 0.076이면 loss를 절반으로 만드는 데 N이 약 9,000배 필요합니다.</p>
+
+<!-- ───────── 2 ───────── -->
+<h2 id="s2">2. 세 개의 멱법칙: L(N), L(D), L(C)</h2>
+<p>논문은 WebText2(약 230억 토큰, BPE 어휘 50,257개)에서 디코더 Transformer를 학습시키고, 1,024토큰 문맥에서 평균한 교차 엔트로피(nats)<sup class="fn" id="fnref1"><a href="#fn1">1</a></sup>를 성능 지표로 씁니다. 세 요인 중 <strong>나머지 둘이 병목이 아닐 때</strong> loss는 각각에 대해 멱법칙을 따릅니다.</p>
+<div class="eq">
+  $$L(N) = \left(\frac{N_c}{N}\right)^{\alpha_N},\quad \alpha_N \approx 0.076,\; N_c \approx 8.8\times10^{13}$$
+  $$L(D) = \left(\frac{D_c}{D}\right)^{\alpha_D},\quad \alpha_D \approx 0.095,\; D_c \approx 5.4\times10^{13}$$
+  $$L(C_{\min}) = \left(\frac{C_c^{\min}}{C_{\min}}\right)^{\alpha_C^{\min}},\quad \alpha_C^{\min} \approx 0.050,\; C_c^{\min} \approx 3.1\times10^{8}\ \text{PF-days}$$
+  <span class="note">식 (1.1)~(1.3), 부록 표 5. N은 임베딩을 뺀 파라미터 수, D는 토큰 수, C<sub>min</sub>은 “충분히 작은 배치로 학습했다면 들었을” 최소 연산(5.1절)입니다. L(N)은 데이터가 충분할 때 수렴까지 학습한 값, L(D)는 큰 모델을 D토큰에서 조기 종료한 값, L(C<sub>min</sub>)은 예산마다 최적 크기의 모델을 고른 값입니다. N<sub>c</sub>, D<sub>c</sub>, C<sub>c</sub>는 토크나이저에 따라 바뀌는 눈금이라 그 자체로 의미는 없습니다.</span>
+</div>
+
+<div class="demo">
+  <h4>데모 2 · 세 법칙에 값 넣어 보기</h4>
+  <p class="cap">실선은 논문이 실제로 측정한 범위, 점선은 그 바깥으로 늘인 외삽입니다. N은 768~15억(3절), D는 2,200만~230억 토큰(3절), C<sub>min</sub>은 그림 13 가로축 범위(약 10⁻⁸~10⁰ PF-days)입니다.</p>
+  <div class="btns top" id="d2btn">
+    <button type="button" data-m="N" aria-pressed="true">L(N) · 모델 크기</button>
+    <button type="button" data-m="D" aria-pressed="false">L(D) · 데이터</button>
+    <button type="button" data-m="C" aria-pressed="false">L(C<sub>min</sub>) · 연산</button>
+  </div>
+  <canvas id="d2cv" height="250"></canvas>
+  <div class="ctrls">
+    <div class="ctrl"><label><span><span id="d2lab">N</span></span> <b id="d2xv"></b></label><input type="range" id="d2x" min="0" max="1000" step="1" value="680"></div>
+  </div>
+  <div class="readout" id="d2out"></div>
+</div>
+<p>지수는 셋 다 0.05~0.1로 작습니다. 10배를 늘려도 loss는 10~20%밖에 줄지 않습니다. 그런데 이 작은 지수가 측정 범위 전체에서 흔들리지 않았다는 것, 그래서 점선 구간도 같은 식으로 계산할 수 있다는 것이 이 논문의 무게입니다. 1.1절 요약의 문장은 이렇습니다. “상단에서 이 추세가 꺾이는 징후는 보지 못했다. 다만 loss가 0에 닿기 전 언젠가는 평평해져야 한다.” 그 “언젠가”는 10절에서 다룹니다.</p>
+
+<!-- ───────── 3 ───────── -->
+<h2 id="s3">3. 작은 실험으로 큰 모델 맞히기</h2>
+<p>멱법칙이 실제로 쓸모 있는 장면은 이렇습니다. 작은 모델 여러 개를 싸게 학습시켜 loss를 찍고, 로그-로그 축에서 직선을 맞춘 다음, 그 직선을 수백 배 큰 모델까지 늘여 loss를 미리 읽습니다. 아래 데모는 이 과정을 그대로 돌립니다. “실험 결과”는 논문 식 (1.1)에 잡음을 더해 만들고, 직선은 log L을 log N에 대해 최소제곱으로 맞춥니다.</p>
+
+<div class="demo">
+  <h4>데모 3 · 직선을 맞추고 늘이기</h4>
+  <p class="cap">파란 점 10개가 작은 모델들의 “측정값”, 주황 선이 맞춘 직선, 회색 선이 참 법칙입니다. 별표는 목표 크기에서 맞춘 직선이 예측한 loss입니다. 잡음은 한 번의 학습마다 생기는 loss 편차로, 논문은 시드에 따른 편차를 약 0.02(4.2절)로 추정합니다.</p>
+  <div class="btns top" id="d3btn">
+    <button type="button" data-m="k" aria-pressed="true">참 법칙: Kaplan 식 (1.1)</button>
+    <button type="button" data-m="f" aria-pressed="false">참 법칙에 바닥이 있다면</button>
+  </div>
+  <canvas id="d3cv" height="260"></canvas>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>실험한 가장 작은 모델</span> <b id="d3lov"></b></label><input type="range" id="d3lo" min="3" max="9" step="0.05" value="4"></div>
+    <div class="ctrl"><label><span>실험한 가장 큰 모델</span> <b id="d3hiv"></b></label><input type="range" id="d3hi" min="3.5" max="10" step="0.05" value="7"></div>
+    <div class="ctrl"><label><span>측정 잡음 σ (nats)</span> <b id="d3nv"></b></label><input type="range" id="d3n" min="0" max="0.1" step="0.002" value="0.02"></div>
+    <div class="ctrl"><label><span>예측할 모델 크기</span> <b id="d3tv"></b></label><input type="range" id="d3t" min="8" max="12.5" step="0.05" value="11.25"></div>
+  </div>
+  <div class="btns"><button type="button" id="d3re">실험 다시 하기 (새 잡음)</button></div>
+  <div class="readout" id="d3out"></div>
+</div>
+<p>Kaplan 법칙을 참으로 두면, 10⁴~10⁷ 범위의 실험만으로 만 배 넘게 위인 1,750억 파라미터의 loss를 대개 2% 안쪽으로 맞힙니다(잡음 0.02에서 오차 중앙값 약 0.7%). 실험 범위를 좁히거나 잡음을 키우면 기울기 추정이 흔들리고, 외삽 거리가 멀수록 그 흔들림이 커집니다. 기울기가 0.005만 틀려도 네 자릿수를 건너면 loss는 \(10^{4\times0.005}\approx 1.05\)배, 5% 차이가 납니다.</p>
+<p>두 번째 버튼은 참 법칙이 직선이 아닌 경우입니다. Chinchilla 논문이 맞춘 식 \(E + A/N^{0.34}\)(9절, 데이터 무한대 극한)를 참으로 두면 로그-로그 그래프가 위로 휘어 평평해집니다. 작은 범위에서 그은 직선은 이 휘어짐을 모르니 큰 모델의 loss를 <strong>실제보다 낮게</strong> 예측합니다. 외삽은 법칙의 꼴이 맞을 때만 믿을 수 있습니다.</p>
+
+<!-- ───────── 4 ───────── -->
+<h2 id="s4">4. 크기만 중요하고 모양은 거의 상관없다</h2>
+<p>같은 파라미터 수라도 층을 깊게 쌓을 수도, 넓게 펼칠 수도 있습니다. 논문은 N을 고정한 채 층 수, 폭, 헤드 수, FFN 비율을 하나씩 바꿔 보고 loss가 넓은 범위에서 <strong>몇 % 안쪽</strong>으로만 움직인다는 것을 보였습니다(그림 5). 층 수 대 폭의 비율이 40배 달라져도 영향이 작았고, (층, d<sub>model</sub>) = (6, 4288)인 모델이 GPT-2의 (48, 1600)과 loss 3% 안쪽으로 맞섰습니다.</p>
+<div class="eq">
+  $$N \approx 2\,d_{\text{model}}\,n_{\text{layer}}\,(2d_{\text{attn}} + d_{\text{ff}}) = 12\,n_{\text{layer}}\,d_{\text{model}}^2$$
+  <span class="note">식 (2.1). d<sub>attn</sub> = d<sub>ff</sub>/4 = d<sub>model</sub>인 표준 설정에서 편향과 LayerNorm 같은 작은 항은 뺍니다. 임베딩 (n<sub>vocab</sub> + n<sub>ctx</sub>)·d<sub>model</sub>도 N에 넣지 않습니다.</span>
+</div>
+<p>임베딩을 빼는 것이 이 논문의 작지만 결정적인 선택이었습니다. 그림 6 왼쪽처럼 임베딩까지 세면 층 수가 다른 모델들이 서로 다른 선 위에 흩어지고, 빼면 한 선으로 모입니다. 작은 모델일수록 임베딩이 전체의 대부분을 차지하기 때문입니다.</p>
+
+<div class="demo">
+  <h4>데모 4 · 같은 N, 다른 모양</h4>
+  <p class="cap">N과 층 수를 정하면 식 (2.1)로 d<sub>model</sub>이 정해집니다. 그래프는 지금의 폭/깊이 비율을 유지한 채 N만 바꿀 때 전체 파라미터 중 임베딩(어휘 50,257 + 위치 1,024)의 비중입니다. 버튼은 논문에 나오는 실제 모양들입니다.</p>
+  <div class="btns top" id="d4pre">
+    <button type="button" data-n="2" data-d="128">(2, 128) · 최소 모델</button>
+    <button type="button" data-n="48" data-d="1600">(48, 1600) · GPT-2</button>
+    <button type="button" data-n="6" data-d="4288">(6, 4288)</button>
+    <button type="button" data-n="207" data-d="768">(207, 768)</button>
+  </div>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>N (임베딩 제외)</span> <b id="d4Nv"></b></label><input type="range" id="d4N" min="5" max="10" step="0.01" value="9.17"></div>
+    <div class="ctrl"><label><span>층 수 n<sub>layer</sub></span> <b id="d4lv"></b></label><input type="range" id="d4l" min="1" max="207" step="1" value="48"></div>
+  </div>
+  <canvas id="d4cv" height="200" style="margin-top:12px"></canvas>
+  <div class="readout" id="d4out"></div>
+  <div class="ctrls" style="margin-top:18px">
+    <div class="ctrl"><label><span>모양 때문에 loss가 이만큼 나빠지면</span> <b id="d4pv"></b></label><input type="range" id="d4p" min="0" max="10" step="0.1" value="1"></div>
+  </div>
+  <div class="readout" id="d4out2"></div>
+</div>
+<p>(2, 128) 모델은 N = 393,216개인데 임베딩은 660만 개가 넘어 전체의 94%입니다. 이런 모델을 전체 파라미터로 줄 세우면 층 수가 다른 모델끼리 비교가 틀어집니다. 아래 계산기는 그림 5의 주석 “1% loss 증가는 22%의 추가 연산으로 메울 수 있다”를 L(C<sub>min</sub>)의 지수 0.050으로 다시 계산한 것입니다. \(1.01^{1/0.050} = 1.22\)입니다. 모양을 조금 잘못 골라 생기는 손해는 예산을 조금 늘리면 사라지는 수준이고, 규모를 10배 늘리는 효과와는 비교가 되지 않습니다. 논문이 형태보다 규모를 앞세운 근거가 이것입니다.</p>
+
+<!-- ───────── 5 ───────── -->
+<h2 id="s5">5. N과 D를 함께: 과적합의 경계</h2>
+<p>L(N)은 데이터가 무한할 때, L(D)는 모델이 무한할 때의 이야기입니다. 실제로는 둘 다 유한합니다. 논문은 두 극한을 동시에 만족하는 식 하나를 제안합니다.</p>
+<div class="eq">
+  $$L(N, D) = \left[\left(\frac{N_c}{N}\right)^{\alpha_N/\alpha_D} + \frac{D_c}{D}\right]^{\alpha_D}$$
+  <span class="note">식 (1.5) = (4.1). D → ∞이면 L(N), N → ∞이면 L(D)로 돌아갑니다. 10% dropout과 조기 종료로 학습한 결과에 맞춘 값은 α<sub>N</sub> = 0.076, α<sub>D</sub> = 0.103, N<sub>c</sub> = 6.4 × 10¹³, D<sub>c</sub> = 1.8 × 10¹³(표 2)입니다. 세 법칙을 따로 맞춘 값과 조금 다릅니다.</span>
+</div>
+<p>D를 고정하고 N을 키우면 처음에는 L(N)을 따라 내려가다가, 어느 순간부터 데이터가 모자라 L(D)라는 바닥에 걸립니다. 과적합 정도를 \(\delta L = L(N,D)/L(N,\infty) - 1\)로 정의하면 이것은 N과 D의 한 조합 \(N^{\alpha_N/\alpha_D}/D\)에만 의존합니다(식 4.3, 그림 9 오른쪽). 시드 편차 0.02 수준 안에서 과적합을 피하려면 대략 다음이 필요합니다.</p>
+<div class="eq">
+  $$D \gtrsim (5\times10^{3})\,N^{0.74}$$
+  <span class="note">식 (4.4). 지수 0.74 = α<sub>N</sub>/α<sub>D</sub>. 모델을 8배 키우면 데이터는 \(8^{0.74} \approx 4.7\)배, 논문 요약의 표현으로 “대략 5배”만 늘리면 됩니다.</span>
+</div>
+
+<div class="demo">
+  <h4>데모 5 · 데이터를 고정하고 모델을 키우면</h4>
+  <p class="cap">그림 9 왼쪽을 표 2의 값으로 다시 그렸습니다. 옅은 선은 논문이 실험한 데이터 크기(2,100만~220억 토큰), 진한 선은 슬라이더로 고른 D, 점선은 D = ∞입니다. 세로 점선은 식 (4.4)의 경계입니다.</p>
+  <canvas id="d5cv" height="260"></canvas>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>데이터 D (토큰)</span> <b id="d5Dv"></b></label><input type="range" id="d5D" min="7" max="10.5" step="0.01" value="8.5"></div>
+    <div class="ctrl"><label><span>모델 N</span> <b id="d5Nv"></b></label><input type="range" id="d5N" min="6" max="11" step="0.01" value="8.5"></div>
+  </div>
+  <div class="readout" id="d5out"></div>
+</div>
+<p>D = 3억 토큰이면 N이 300만을 넘으면서 과적합이 2%를 넘고, 1억을 넘으면 곡선이 거의 평평해집니다(1억 → 10억에서 loss 3.18 → 3.11). 데이터가 정한 바닥 L(D)에 걸린 것입니다. 경계식은 데이터가 모델보다 <strong>느리게</strong>(N<sup>0.74</sup>) 늘어도 된다고 말합니다. 230억 토큰의 WebText2로는 10억 파라미터 아래 모델까지 과적합 없이 학습할 수 있었고, 논문의 가장 큰 모델들은 약간의 과적합을 겪었습니다(4.2절). 마지막 칸의 조기 종료 하한은 식 (5.7)로, 과적합이 클수록 일찍 멈춰야 한다는 것을 숫자로 줍니다.</p>
+
+<!-- ───────── 6 ───────── -->
+<h2 id="s6">6. 큰 모델이 더 빨리 배운다</h2>
+<p>학습 시간도 같은 꼴의 법칙을 따릅니다. 데이터가 무한할 때 S 스텝 학습한 모델의 loss는 이렇게 맞춰집니다.</p>
+<div class="eq">
+  $$L(N, S_{\min}) = \left(\frac{N_c}{N}\right)^{\alpha_N} + \left(\frac{S_c}{S_{\min}}\right)^{\alpha_S}$$
+  <span class="note">식 (1.6) = (5.6), 표 3: α<sub>N</sub> = 0.077, α<sub>S</sub> = 0.76, N<sub>c</sub> = 6.5 × 10¹³, S<sub>c</sub> = 2.1 × 10³. S<sub>min</sub>은 배치가 충분히 클 때의 최소 스텝 수(식 5.4)입니다. 첫째 항은 모델 크기가 정하는 수렴값, 둘째 항은 덜 학습한 만큼의 손해입니다.</span>
+</div>
+<p>둘째 항은 N과 상관이 없습니다. 그래서 어느 시점에서든 큰 모델의 loss가 더 낮고, <strong>같은 loss에 더 적은 스텝과 더 적은 토큰으로</strong> 도달합니다(그림 2). 논문은 이것을 “큰 모델이 더 샘플 효율적이다”라고 부릅니다. 그러면 목표 loss가 정해졌을 때 연산을 가장 적게 쓰는 모델은 어느 것일까요? 작은 모델은 수렴값이 목표에 가까워 끝없이 오래 돌려야 하고, 너무 큰 모델은 한 스텝이 비쌉니다.</p>
+
+<div class="demo">
+  <h4>데모 6 · 목표 loss에 가장 싸게 도달하는 모델</h4>
+  <p class="cap">N = 10⁵~10¹⁰의 학습 곡선입니다(식 5.6, 표 3). 가로 점선이 목표 loss이고, 각 곡선과 만나는 점에서 필요한 스텝 수를 읽습니다. 연산은 C<sub>min</sub> = 6·N·B<sub>crit</sub>(L)·S<sub>min</sub>(6.1절)로 셉니다. 임계 배치 B<sub>crit</sub>(L) = 2.1 × 10⁸ / L<sup>1/0.21</sup> 토큰(식 1.4, 표 5)입니다. 표에서 가장 싼 행이 강조됩니다.</p>
+  <canvas id="d6cv" height="260"></canvas>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>목표 loss (nats)</span> <b id="d6Lv"></b></label><input type="range" id="d6L" min="2.3" max="4.6" step="0.01" value="3.2"></div>
+  </div>
+  <div class="tw"><table><thead><tr><th>N</th><th class="num">수렴 loss</th><th class="num">필요 스텝</th><th class="num">처리 토큰</th><th class="num">PF-days</th></tr></thead><tbody id="d6tab"></tbody></table></div>
+  <div class="readout" id="d6out"></div>
+</div>
+<p>목표를 어디에 두든 가장 싼 모델은 <strong>수렴값보다 약 10% 높은 곳에서 학습을 멈추는</strong> 모델입니다. 부록 B.2의 식 (B.5)가 이것을 정확히 줍니다. 최적점에서 \(L = (1 + \alpha_N/\alpha_S)\,L(N, \infty)\)이고 \(\alpha_N/\alpha_S = 0.077/0.76 \approx 0.10\)입니다. 반대로 흔히 하듯 수렴값의 2% 안까지 돌리면, 같은 loss를 위해 파라미터는 2.7배 적게 쓰지만 스텝은 7.7배 더 쓰고 연산은 약 1/0.35 ≈ 2.9배를 씁니다(식 B.12~B.14). 논문 요약의 한 줄이 이것입니다. <strong>“수렴은 비효율적이다.”</strong></p>
+
+<!-- ───────── 7 ───────── -->
+<h2 id="s7">7. 연산량 세기: C ≈ 6ND</h2>
+<p>예산을 이야기하려면 연산을 셀 수 있어야 합니다. 순전파에서 파라미터 하나는 토큰 하나당 곱셈 한 번과 덧셈 한 번, 즉 2 FLOP를 씁니다(식 2.2의 2N). 역전파는 그 두 배쯤이라 합치면 <strong>토큰당 6N</strong>입니다.</p>
+<div class="eq">
+  $$C_{\text{forward}} \approx 2N + 2\,n_{\text{layer}}\,n_{\text{ctx}}\,d_{\text{model}},\qquad C \approx 6NBS = 6ND$$
+  <span class="note">식 (2.2)와 1.3절. 두 번째 항(어텐션 점수 계산)은 d<sub>model</sub> &gt; n<sub>ctx</sub>/12이면 작아서 논문은 뺍니다. 비율로는 n<sub>ctx</sub>/(12d<sub>model</sub>)이라 GPT-2 크기(d = 1600, n<sub>ctx</sub> = 1024)에서 약 5%입니다. 연산 단위 PF-day는 10¹⁵ × 24 × 3600 = 8.64 × 10¹⁹ FLOP입니다<sup class="fn" id="fnref2"><a href="#fn2">2</a></sup>.</span>
+</div>
+
+<div class="demo">
+  <h4>데모 7 · 6ND 계산기</h4>
+  <p class="cap">N과 D로 학습 연산을 셉니다. 아래는 GPU 대수와 실제 활용률(MFU, 이론 최대 대비 실제로 낸 비율)로 환산한 벽시계 시간입니다. GPU 이론치는 V100 125, A100 312, H100 989 TFLOPS(16비트 텐서 연산, 희소성 제외)입니다. 버튼은 Chinchilla 논문 표 1의 모델 크기와 학습 토큰입니다.</p>
+  <div class="btns top" id="d7pre"></div>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>파라미터 N</span> <b id="d7Nv"></b></label><input type="range" id="d7N" min="8" max="12.5" step="0.01" value="11.243"></div>
+    <div class="ctrl"><label><span>학습 토큰 D</span> <b id="d7Dv"></b></label><input type="range" id="d7D" min="9" max="13.5" step="0.01" value="11.477"></div>
+  </div>
+  <canvas id="d7cv" height="230" style="margin-top:12px"></canvas>
+  <div class="readout" id="d7out"></div>
+  <div class="btns" id="d7gpu">
+    <button type="button" data-f="125e12" aria-pressed="false">V100</button>
+    <button type="button" data-f="312e12" aria-pressed="true">A100</button>
+    <button type="button" data-f="989e12" aria-pressed="false">H100</button>
+  </div>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>GPU 대수</span> <b id="d7gv"></b></label><input type="range" id="d7g" min="0" max="5" step="0.01" value="3.01"></div>
+    <div class="ctrl"><label><span>활용률 MFU</span> <b id="d7mv"></b></label><input type="range" id="d7m" min="10" max="70" step="1" value="40"></div>
+  </div>
+  <div class="readout" id="d7out2"></div>
+</div>
+<p>GPT-3(175B, 300B 토큰)은 6ND로 3.15 × 10²³ FLOP, 약 3,600 PF-days입니다. Chinchilla(70B, 1.4T 토큰)는 5.9 × 10²³으로 Gopher(280B, 300B 토큰)의 5.0 × 10²³과 같은 급입니다. 같은 예산을 한쪽은 큰 모델에, 한쪽은 많은 데이터에 쓴 셈이고, 9절의 이야기가 이 차이입니다. 참고로 Chinchilla 논문은 Gopher 예산을 5.76 × 10²³으로 적는데, 어텐션 등 6ND가 빼는 항까지 센 값(부록 F)이라 조금 큽니다.</p>
+
+<!-- ───────── 8 ───────── -->
+<h2 id="s8">8. 연산 예산을 어떻게 나눌까</h2>
+<p>이제 원래 질문입니다. 연산 C가 정해져 있을 때 모델을 키울까, 데이터를 더 볼까? 6절의 학습 곡선 식에 S = C/(6NB)를 넣고 N에 대해 최소화하면(부록 B.1) 예산이 늘 때 각 양이 어떻게 늘어야 하는지가 나옵니다. 논문이 실측으로 맞춘 값은 다음과 같습니다.</p>
+<div class="eq">
+  $$N_{\text{opt}} \propto C_{\min}^{0.73},\qquad B \propto C_{\min}^{0.24},\qquad S \propto C_{\min}^{0.03},\qquad D = B\cdot S \propto C_{\min}^{0.27}$$
+  <span class="note">식 (1.7), (6.1), (6.2), 부록 표 6. 계수는 N<sub>e</sub> = 1.3 × 10⁹, B<sub>e</sub> = 2.0 × 10⁶ 토큰, S<sub>e</sub> = 5.4 × 10³ 스텝, D<sub>e</sub> = 2 × 10¹⁰ 토큰(C<sub>min</sub>을 PF-days로 쓸 때). 이론으로 예측한 지수는 \(\alpha_C^{\min}/\alpha_N \approx 0.71\)(식 6.5)이라 실측과 몇 % 안에서 맞습니다.</span>
+</div>
+<p>연산을 10배 늘리면 모델은 \(10^{0.73}\approx 5.4\)배, 배치는 1.7배, 스텝은 1.07배입니다. 늘어난 예산의 대부분이 모델 크기로 가고, 데이터는 약 1.9배만 늘며, 그나마 대부분은 배치를 키우는 데 쓰여 학습 시간(직렬 스텝)은 거의 그대로입니다(그림 3). 논문의 마지막 문장 “큰 모델이 큰 데이터보다 중요할 수 있다”가 여기서 나옵니다.</p>
+
+<div class="demo">
+  <h4>데모 8 · 예산과 최적 배분, 그리고 빗나간 크기의 비용</h4>
+  <p class="cap">위 슬라이더는 예산 C<sub>min</sub>에서 표 6의 처방을 계산합니다. 그래프는 최적 크기 N<sub>eff</sub>의 몇 배 모델을 쓸 때 같은 loss에 드는 연산(식 B.16)과 스텝(식 B.17)의 비율입니다. 너무 작은 모델은 그 loss에 아예 닿지 못해 곡선이 위로 솟습니다.</p>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>연산 예산 C<sub>min</sub> (PF-days)</span> <b id="d8cv_"></b></label><input type="range" id="d8c" min="-6" max="6" step="0.01" value="0"></div>
+  </div>
+  <div class="readout" id="d8out"></div>
+  <canvas id="d8cv" height="240" style="margin-top:14px"></canvas>
+  <div class="legend"><span><i style="background:var(--s1)"></i><span>필요 연산 비율 C / C(N<sub>eff</sub>)</span></span><span><i style="background:var(--s2)"></i><span>필요 스텝 비율 S / S(N<sub>eff</sub>)</span></span></div>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>모델 크기 N / N<sub>eff</sub></span> <b id="d8rv"></b></label><input type="range" id="d8r" min="-0.45" max="1" step="0.005" value="0.342"></div>
+  </div>
+  <div class="readout" id="d8out2"></div>
+</div>
+<p>최적 크기의 0.6배~2.2배 모델은 연산을 20%만 더 쓰면 같은 loss에 닿습니다(그림 12). 2.2배 큰 모델은 연산은 20% 더 들지만 스텝은 45% 적어서, 병렬 장비가 넉넉하면 더 빨리 끝납니다. 반대로 작은 쪽은 추론 비용이 싸다는 장점이 있습니다. 이 처방에서 데이터는 예산의 0.27제곱으로만 늘어납니다. Chinchilla 논문은 이후의 대형 모델 대부분이 이 처방과 GPT-3의 설정을 따라 모델은 키우고 학습 토큰은 300B 안팎에 두었다고 적습니다(표 1).</p>
+
+<!-- ───────── 9 ───────── -->
+<h2 id="s9">9. Chinchilla가 바꾼 배분</h2>
+<p>2022년 DeepMind의 Hoffmann 등은 같은 질문을 다시 물었습니다. 7천만~160억 파라미터 모델 400개 이상을 50억~5,000억 토큰으로 학습시키고 세 가지 방법으로 최적 배분을 추정했더니, 셋 모두 <strong>N과 D를 같은 비율로</strong> 늘려야 한다는 답을 냈습니다.</p>
+<div class="tw"><table>
+  <thead><tr><th>방법</th><th class="num">N<sub>opt</sub> ∝ C<sup>a</sup></th><th class="num">D<sub>opt</sub> ∝ C<sup>b</sup></th></tr></thead>
+  <tbody>
+  <tr><td>1. 학습 곡선들의 최솟값 포락선</td><td class="num">0.50</td><td class="num">0.50</td></tr>
+  <tr><td>2. IsoFLOP 단면(같은 연산에서 크기만 바꿈)</td><td class="num">0.49</td><td class="num">0.51</td></tr>
+  <tr><td>3. 손실 함수 L(N, D)를 직접 맞춤</td><td class="num">0.46</td><td class="num">0.54</td></tr>
+  <tr><td>Kaplan et al. (2020)</td><td class="num">0.73</td><td class="num">0.27</td></tr>
+  </tbody>
+</table></div>
+<p style="margin-top:-6px;font-size:13px;color:var(--muted)">Hoffmann et al. (2022) 표 2.</p>
+<p>세 번째 방법은 Kaplan과 다른 꼴의 식을 씁니다. 자연어 자체의 엔트로피에 해당하는 상수 E를 따로 두고, 모델 크기와 데이터의 부족분을 <strong>더하는</strong> 꼴입니다.</p>
+<div class="eq">
+  $$\hat L(N, D) = E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}},\qquad E = 1.69,\ A = 406.4,\ B = 410.7,\ \alpha = 0.34,\ \beta = 0.28$$
+  <span class="note">Hoffmann et al. 식 (2), (10). 데이터셋(MassiveText)과 토크나이저가 다르므로 loss 값을 Kaplan의 WebText2 loss와 직접 비교할 수는 없습니다. 6ND 제약 아래 최소화하면 \(N_{\text{opt}} = G\,(C/6)^{\beta/(\alpha+\beta)}\), \(G = (\alpha A/\beta B)^{1/(\alpha+\beta)}\)(식 4)입니다.</span>
+</div>
+
+<div class="demo">
+  <h4>데모 9 · 같은 연산, 다른 배분</h4>
+  <p class="cap">“IsoFLOP 단면”은 연산 C를 고정하고 N을 바꿀 때(D = C/6N) 식 (10)의 loss입니다. 파란 점이 그 최솟값, 주황 점이 Kaplan 처방(N = 1.3 × 10⁹ · C<sup>0.73</sup>, C를 PF-days로), 회색 점이 토큰을 300B로 고정했을 때입니다. “최적 크기 대 연산”은 예산별 최적 N과 실제 모델들(C = 6ND)을 나란히 놓습니다.</p>
+  <div class="btns top" id="d9btn">
+    <button type="button" data-m="iso" aria-pressed="true">IsoFLOP 단면</button>
+    <button type="button" data-m="fr" aria-pressed="false">최적 크기 대 연산</button>
+  </div>
+  <canvas id="d9cv" height="270"></canvas>
+  <div class="legend" id="d9leg"></div>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>연산 C (FLOPs)</span> <b id="d9cv_"></b></label><input type="range" id="d9c" min="18" max="26" step="0.01" value="23.76"></div>
+  </div>
+  <div class="readout" id="d9out"></div>
+</div>
+<p>Gopher 예산(5.76 × 10²³ FLOP)에서 방법 1은 67B 파라미터와 1.5T 토큰을 권합니다(Chinchilla 표 3). 저자들은 70B 모델을 1.4T 토큰으로 학습시켜 Chinchilla라 이름 붙였고, 같은 연산을 쓴 280B Gopher를 거의 모든 평가에서 앞섰습니다. MMLU 5-shot 평균은 Gopher 60.0%에서 67.6%로 올랐습니다(표 6). 모델이 4배 작으니 추론과 미세조정 비용도 크게 줄었습니다. 표 3을 보면 최적 배분에서 토큰 수는 파라미터의 약 20배이고(1B → 20.2B, 10B → 205.1B), 이것이 흔히 말하는 “파라미터당 20토큰”입니다.</p>
+<p>데모의 식 (10)으로 계산하면 Gopher 예산의 최적점은 약 32B로, 논문 그림 4가 같은 식으로 적은 40B와 다릅니다. 논문에 반올림되어 실린 계수로는 원래 결과가 재현되지 않기 때문인데, Besiroglu 외(2024)는 방법 3의 보고값이 방법 1·2와 맞지 않는다는 것을 재현 실험으로 지적했습니다. 그래서 위 표의 방법 1·2가 더 자주 인용됩니다. 어느 쪽이든 “Kaplan 처방보다 훨씬 작은 모델에 훨씬 많은 데이터”라는 방향은 같습니다.</p>
+<h3>왜 결론이 달라졌나</h3>
+<p>Chinchilla 논문 2절은 차이의 원인을 두 가지로 꼽습니다. 첫째, Kaplan은 모든 모델을 같은 학습률 스케줄과 같은 토큰 수(2.5 × 10⁵ 스텝 × 512 × 1024 ≈ 1,300억 토큰, 2.2절)로 학습시키고 중간 지점의 loss를 짧은 학습의 결과로 썼습니다. 코사인 스케줄은 끝까지 가야 학습률이 다 내려가므로, 중간 loss는 “그만큼만 학습하도록 스케줄을 짠 모델”의 loss보다 높습니다. 이 때문에 적은 데이터로 학습하는 효과가 과소평가되었고, 결과적으로 “데이터보다 모델을 빨리 키워라”가 나왔다는 것입니다. Kaplan 논문도 부록 C에서 짧은 학습에는 더 큰 학습률을 쓸 수 있는데 실험하지 않았다고 적어 두었습니다. 둘째, Kaplan의 실험은 대부분 1억 파라미터 아래였고, Chinchilla는 5억 이상 모델이 대부분이었습니다. 연산-loss 경계가 조금 휘어 있어서 작은 모델에서 맞춘 기울기가 큰 쪽으로 그대로 이어지지 않습니다.</p>
+<p>결국 멱법칙이라는 틀은 살아남았고, 지수는 바뀌었습니다. 3절의 교훈 그대로입니다. 외삽은 측정 방식과 범위가 맞을 때만 믿을 수 있습니다.</p>
+
+<!-- ───────── 10 ───────── -->
+<h2 id="s10">10. 멱법칙은 어디서 멈추는가</h2>
+<p>Kaplan의 식에는 바닥이 없습니다. N이나 C를 무한히 키우면 loss는 0으로 갑니다. 하지만 자연어에는 줄일 수 없는 불확실성(엔트로피)이 있으니 언젠가는 평평해져야 합니다. 논문 6.3절은 자기 식 안에서 이 모순을 직접 찾아냅니다. 연산 최적 학습은 데이터를 C<sup>0.26</sup>으로만 늘리는데(식 6.7), 그만큼의 데이터로 도달할 수 있는 loss L(D)는 C<sup>−0.03</sup>으로만 내려갑니다. L(C<sub>min</sub>)은 C<sup>−0.050</sup>으로 내려가니 두 직선은 언젠가 만나고, 그 너머에서 L(C<sub>min</sub>)은 데이터가 허락하는 것보다 낮은 loss를 예측하게 됩니다.</p>
+
+<div class="demo">
+  <h4>데모 10 · 두 직선의 교차점</h4>
+  <p class="cap">그림 15를 다시 그립니다. 파란 선은 L(C<sub>min</sub>) = (3.1 × 10⁸ / C<sub>min</sub>)<sup>α<sub>C</sub></sup>, 주황 선은 연산 최적 학습이 쓰는 데이터 D(C<sub>min</sub>) = 4 × 10¹⁰ · C<sub>min</sub><sup>0.26</sup>(식 6.7)을 L(D) = (5.4 × 10¹³ / D)<sup>α<sub>D</sub></sup>에 넣은 선입니다. 빈 원은 논문 본문이 적은 교차점(식 6.8)입니다. 지수를 조금씩 바꿔 보세요.</p>
+  <canvas id="d10cv" height="260"></canvas>
+  <div class="ctrls">
+    <div class="ctrl"><label><span>α<sub>C</sub><sup>min</sup></span> <b id="d10av"></b></label><input type="range" id="d10a" min="0.040" max="0.060" step="0.0005" value="0.050"></div>
+    <div class="ctrl"><label><span>α<sub>D</sub></span> <b id="d10bv"></b></label><input type="range" id="d10b" min="0.080" max="0.110" step="0.0005" value="0.095"></div>
+  </div>
+  <div class="readout" id="d10out"></div>
+  <div class="warnbox" id="d10warn"></div>
+</div>
+<p>부록 표 5의 값을 그대로 넣으면 교차점은 C* ≈ 10⁵ PF-days, L* ≈ 1.5입니다. 본문 식 (6.8)은 C* ~ 10⁴ PF-days, N* ~ 10¹² 파라미터, D* ~ 10¹² 토큰, L* ~ 1.7 nats/token으로 적었습니다. 한 자릿수가 다르지만, 논문 스스로 “지수의 정확한 값에 따라 어느 방향으로든 한 자릿수씩 움직인다”고 밝혀 두었습니다. 지수를 0.005만 바꿔도 교차점이 수십 배 움직이는 것을 데모에서 볼 수 있습니다. 저자들은 법칙이 이 지점 전에 깨질 것이라고 보면서, 이 지점이 자연어에서 뽑아낼 수 있는 정보가 바닥나는 곳, 즉 L*가 토큰당 엔트로피의 대략적인 추정일 수 있다는 추측도 덧붙였습니다. Chinchilla 식의 E = 1.69가 바로 그 바닥을 명시적으로 넣은 항입니다(데이터셋이 달라 수치를 직접 비교할 수는 없습니다).</p>
+<p>멱법칙의 한계는 이것 말고도 있습니다.</p>
+<ul>
+  <li><strong>loss는 능력이 아닙니다.</strong> 논문 8절은 “매끈한 양적 변화가 큰 질적 변화를 가릴 수 있다(more is different)”고 적습니다. loss가 예측대로 내려가도 특정 과제의 정확도는 갑자기 뛰거나 그대로일 수 있습니다.</li>
+  <li><strong>데이터는 무한하지 않습니다.</strong> Chinchilla 처방은 1조 파라미터 모델에 21조 토큰을 요구하고(표 3), 저자들은 데이터 수집이 엔지니어링만큼 중요해졌다고 적었습니다.</li>
+  <li><strong>법칙은 설정에 묶여 있습니다.</strong> 지수는 데이터 분포, 토크나이저, 학습률 스케줄, 아키텍처에 따라 바뀝니다. Kaplan도 부록 C에서 이론적 근거가 없다는 점, 작은 데이터 영역과 정규화를 충분히 탐색하지 않았다는 점을 한계로 적었습니다.</li>
+  <li><strong>학습 연산만 셉니다.</strong> 모델을 실제로 서비스하면 추론 비용이 학습 비용을 넘어설 수 있습니다. 이 경우 “연산 최적”보다 작은 모델을 더 오래 학습시키는 편이 전체 비용으로는 이득이고, Kaplan(B.4절)과 Chinchilla 모두 작은 모델의 추론 이점을 언급합니다.</li>
+</ul>
+<p>그래도 이 논문 이후로 대형 모델 학습은 “일단 크게 만들어 보자”에서 “작게 여러 번 재고, 직선을 긋고, 그 직선이 가리키는 크기에 예산을 건다”로 바뀌었습니다. 무엇을 키울지에 대한 답은 바뀌었지만, 계산해서 정한다는 방식은 그대로 남았습니다.</p>
+
+<!-- ───────── 11 ───────── -->
+<h2 id="s11">11. 확인 퀴즈</h2>
+<div id="quiz"></div>
+<p class="quiz-score" id="quizScore"></p>
+
+<section class="footnotes" aria-label="각주">
+<h2>각주</h2>
+<ol>
+<li id="fn1">
+<p><strong>nats와 퍼플렉시티.</strong> 교차 엔트로피 loss는 정답 토큰에 모델이 준 확률 p의 −log p를 평균한 값입니다. 자연로그를 쓰면 단위가 nats, 밑이 2면 bits입니다(1 nat ≈ 1.44 bits). loss L의 지수 e<sup>L</sup>을 퍼플렉시티라고 부르는데, “모델이 매 토큰 몇 개의 후보 사이에서 고르는 것처럼 헷갈리는가”로 읽을 수 있습니다. L = 2.3이면 e<sup>2.3</sup> ≈ 10, 대략 열 개 중 하나를 고르는 정도의 불확실성입니다. loss 값은 토크나이저에 따라 달라지므로 서로 다른 토크나이저를 쓰는 모델끼리 직접 비교하면 안 됩니다. <a class="back" href="#fnref1" aria-label="본문으로 돌아가기">↩</a></p>
+</li>
+<li id="fn2">
+<p><strong>FLOP와 FLOPS, PF-day.</strong> FLOP는 부동소수점 연산 한 번(학습 전체의 연산량), FLOPS는 초당 연산 수(장비의 속도)입니다. 1 PF-day는 초당 10¹⁵회(1 petaFLOPS)로 하루 동안 돌린 양, 8.64 × 10¹⁹ FLOP입니다. 논문은 큰 수를 다루기 쉽게 이 단위를 씁니다. GPT-3의 3.15 × 10²³ FLOP는 약 3,640 PF-days입니다. <a class="back" href="#fnref2" aria-label="본문으로 돌아가기">↩</a></p>
+</li>
+</ol>
+</section>
+
+<footer>
+<p><strong>참고 문헌</strong></p>
+<ul class="refs">
+<li>Kaplan, McCandlish, Henighan, Brown, Chess, Child, Gray, Radford, Wu &amp; Amodei (2020), <em>Scaling Laws for Neural Language Models</em> — <a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener">arXiv:2001.08361</a></li>
+<li>Hoffmann 외 (2022), <em>Training Compute-Optimal Large Language Models</em> (Chinchilla) — <a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">arXiv:2203.15556</a></li>
+<li>Besiroglu, Erdil, Barnett &amp; You (2024), <em>Chinchilla Scaling: A replication attempt</em> — <a href="https://arxiv.org/abs/2404.10102" target="_blank" rel="noopener">arXiv:2404.10102</a></li>
+<li>McCandlish, Kaplan, Amodei &amp; OpenAI Dota Team (2018), <em>An Empirical Model of Large-Batch Training</em> — <a href="https://arxiv.org/abs/1812.06162" target="_blank" rel="noopener">arXiv:1812.06162</a> (임계 배치 크기)</li>
+<li>Brown 외 (2020), <em>Language Models are Few-Shot Learners</em> (GPT-3) — <a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">arXiv:2005.14165</a></li>
+</ul>
+<p style="margin-top:18px"><a href="https://github.com/dev-jonghoonpark/how-ai-works">how-ai-works</a> 시리즈 · 모든 계산은 브라우저에서 실시간으로 이루어집니다.</p>
+</footer>
+</div>
+
+<script>
+var $=function(s){return document.querySelector(s);};
+var $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};
+var cssCache={};
+function css(v){return v in cssCache?cssCache[v]:(cssCache[v]=getComputedStyle(document.documentElement).getPropertyValue(v).trim());}
+/* 모바일 캔버스: 논리 높이는 data-h에, dpr은 2로 제한, 크기가 같으면 버퍼 재사용 */
+function setup(cv){
+  if(!cv.dataset.h)cv.dataset.h=cv.getAttribute('height');
+  var dpr=Math.min(2,window.devicePixelRatio||1), w=cv.clientWidth, h=+cv.dataset.h;
+  var bw=Math.round(w*dpr), bh=Math.round(h*dpr);
+  if(cv.width!==bw||cv.height!==bh){cv.width=bw;cv.height=bh;cv.style.height=h+'px';}
+  var c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  c.clearRect(0,0,w,h);
+  return {c:c,w:w,h:h};
+}
+function onFrame(fn){var q=false;return function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;fn();});};}
+function hexA(hex,a){var n=parseInt(hex.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){var u=1-r(),v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function fmt(x,d){return (+x).toFixed(d==null?2:d);}
+function cl(x,a,b){return Math.max(a,Math.min(b,x));}
+
+/* ── 숫자 표기 ── */
+var SUP={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+function p10(e){return '10'+String(e).split('').map(function(ch){return SUP[ch];}).join('');}
+function sci(x,d){
+  if(!isFinite(x))return '∞'; if(x===0)return '0';
+  var e=Math.floor(Math.log10(Math.abs(x))), m=x/Math.pow(10,e); d=d==null?1:d;
+  if(+m.toFixed(d)>=10){m/=10;e++;}
+  if(e===0)return m.toFixed(d);
+  return m.toFixed(d)+' × '+p10(e);
+}
+function human(x,d){
+  if(!isFinite(x))return '∞';
+  var u=[[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']];
+  for(var i=0;i<u.length;i++){if(Math.abs(x)>=u[i][0]){var v=x/u[i][0];return (v>=100?v.toFixed(0):v>=10?v.toFixed(d==null?1:d):v.toFixed(d==null?2:d)).replace(/\.0+$/,'')+u[i][1];}}
+  return x>=10?Math.round(x).toString():x.toFixed(1);
+}
+function times(x){return x>=100?Math.round(x).toLocaleString('en-US')+'배':x>=10?x.toFixed(1)+'배':x.toFixed(2)+'배';}
+
+/* ══════ 논문 식 (검증 스크립트가 이 블록만 떼어 node로 돌린다) ══════ */
+/* MATH-BEGIN */
+var K={ /* Kaplan 표 5 */
+  aN:0.076, Nc:8.8e13, aD:0.095, Dc:5.4e13, aCmin:0.050, Ccmin:3.1e8, aC:0.057, Cc:1.6e7, aB:0.21, Bstar:2.1e8, aS:0.76, Sc:2.1e3,
+  /* 표 2 · L(N,D) */ ND:{aN:0.076, aD:0.103, Nc:6.4e13, Dc:1.8e13},
+  /* 표 3 · L(N,S) */ NS:{aN:0.077, aS:0.76, Nc:6.5e13, Sc:2.1e3},
+  /* 표 6 · 연산 최적 */ opt:{pN:0.73, Ne:1.3e9, pB:0.24, Be:2.0e6, pS:0.03, Se:5.4e3, pD:0.27, De:2e10},
+  PFDAY:8.64e19
+};
+function LN(N){return Math.pow(K.Nc/N,K.aN);}
+function LD(D){return Math.pow(K.Dc/D,K.aD);}
+function LCmin(C){return Math.pow(K.Ccmin/C,K.aCmin);}
+function LND(N,D){var p=K.ND;return Math.pow(Math.pow(p.Nc/N,p.aN/p.aD)+(isFinite(D)?p.Dc/D:0),p.aD);}
+function deltaL(N,D){return LND(N,D)/LND(N,Infinity)-1;}
+function Dneeded(N){return 5e3*Math.pow(N,0.74);}               /* 식 (4.4) */
+function Sstop(N,D){return K.NS.Sc/Math.pow(LND(N,D)-LND(N,Infinity),1/K.NS.aS);} /* 식 (5.7) */
+function LNS(N,S){var p=K.NS;return Math.pow(p.Nc/N,p.aN)+Math.pow(p.Sc/S,p.aS);}
+function LNinf_S(N){var p=K.NS;return Math.pow(p.Nc/N,p.aN);}
+function stepsTo(N,L){var p=K.NS,r=L-LNinf_S(N);return r>0?p.Sc/Math.pow(r,1/p.aS):Infinity;}
+function Bcrit(L){return K.Bstar/Math.pow(L,1/K.aB);}         /* 식 (1.4) */
+function Neff_for(L){var p=K.NS;return p.Nc*Math.pow((1+p.aN/p.aS)/L,1/p.aN);} /* 식 (B.5)에서 */
+function kaplanAlloc(C){var o=K.opt;return {N:o.Ne*Math.pow(C,o.pN),B:o.Be*Math.pow(C,o.pB),S:o.Se*Math.pow(C,o.pS),D:o.De*Math.pow(C,o.pD),L:LCmin(C)};}
+function excessC(r){var a=K.aS/K.aN,t=1+a*(1-Math.pow(1/r,K.aN));return t>0?r*Math.pow(t,-1/K.aS):Infinity;} /* 식 (B.16) */
+function excessS(r){var a=K.aS/K.aN,t=1+a*(1-Math.pow(1/r,K.aN));return t>0?Math.pow(t,-1/K.aS):Infinity;}   /* 식 (B.17) */
+var CH={E:1.69,A:406.4,B:410.7,al:0.34,be:0.28};               /* Hoffmann 식 (10) */
+function Lchin(N,D){return CH.E+CH.A/Math.pow(N,CH.al)+CH.B/Math.pow(D,CH.be);}
+function chinOpt(C){var G=Math.pow(CH.al*CH.A/(CH.be*CH.B),1/(CH.al+CH.be)),a=CH.be/(CH.al+CH.be),b=CH.al/(CH.al+CH.be);
+  var N=G*Math.pow(C/6,a),D=Math.pow(G,-1)*Math.pow(C/6,b);return {N:N,D:D,L:Lchin(N,D),a:a,b:b};}
+function chinA1(C){return 67e9*Math.pow(C/5.76e23,0.5);}        /* 표 3(방법 1)을 지수 0.50으로 잇는 선 */
+function kaplanN_flops(C){return K.opt.Ne*Math.pow(C/K.PFDAY,K.opt.pN);}
+function flops6ND(N,D){return 6*N*D;}
+function fitLogLog(xs,ys){var n=xs.length,sx=0,sy=0,sxx=0,sxy=0;
+  for(var i=0;i<n;i++){var x=Math.log(xs[i]),y=Math.log(ys[i]);sx+=x;sy+=y;sxx+=x*x;sxy+=x*y;}
+  var s=(n*sxy-sx*sy)/(n*sxx-sx*sx),b=(sy-s*sx)/n;return {slope:s,icpt:b,f:function(N){return Math.exp(b+s*Math.log(N));}};}
+function crossing(aC,aD){ /* 식 (6.7)의 D(C)를 L(D)에 넣은 선과 L(Cmin)의 교점 */
+  var den=aC-0.26*aD; if(den<=0)return null;
+  var lnC=(aC*Math.log(K.Ccmin)-aD*Math.log(K.Dc/4e10))/den, C=Math.exp(lnC);
+  return {C:C,L:Math.pow(K.Ccmin/C,aC),D:4e10*Math.pow(C,0.26),N:K.opt.Ne*Math.pow(C,K.opt.pN)};}
+/* MATH-END */
+
+/* ══════ 그래프 틀 ══════ */
+function niceLogTicks(lo,hi){
+  var out=[],e0=Math.floor(Math.log10(lo)),e1=Math.ceil(Math.log10(hi));
+  var span=Math.log10(hi/lo), ms=span<0.5?[1,1.2,1.5,2,2.5,3,4,5,6,7,8,9]:span<1.2?[1,1.5,2,3,4,5,6,8]:span<2.5?[1,2,5]:[1];
+  for(var e=e0;e<=e1;e++)ms.forEach(function(m){var v=m*Math.pow(10,e);if(v>=lo*0.999&&v<=hi*1.001)out.push(v);});
+  return out;
+}
+function linTicks(lo,hi,n){var raw=(hi-lo)/(n||5),mag=Math.pow(10,Math.floor(Math.log10(raw))),st=[1,2,2.5,5,10].map(function(m){return m*mag;}).find(function(s){return s>=raw;});
+  var out=[];for(var v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st)out.push(+v.toFixed(10));return out;}
+function decTicks(lo,hi,maxN){var e0=Math.ceil(Math.log10(lo)-1e-9),e1=Math.floor(Math.log10(hi)+1e-9),n=e1-e0+1,st=Math.max(1,Math.ceil(n/maxN)),out=[];
+  for(var e=e0;e<=e1;e+=st)out.push(Math.pow(10,e));return out;}
+function frame(cv,o){
+  var S=setup(cv),c=S.c,W=S.w,H=S.h,narrow=W<480;
+  var m={l:o.ml||(narrow?40:48),r:12,t:12,b:34},x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  function tx(v){return o.xlog?Math.log10(v):v;} function ty(v){return o.ylog?Math.log10(v):v;}
+  var ax=tx(o.x[0]),bx=tx(o.x[1]),ay=ty(o.y[0]),by=ty(o.y[1]);
+  S.X=function(v){return x0+(x1-x0)*(tx(v)-ax)/(bx-ax);};
+  S.Y=function(v){return y0-(y0-y1)*(ty(v)-ay)/(by-ay);};
+  S.iX=function(px){var t=ax+(px-x0)/(x1-x0)*(bx-ax);return o.xlog?Math.pow(10,t):t;};
+  S.x0=x0;S.x1=x1;S.y0=y0;S.y1=y1;S.o=o;S.narrow=narrow;
+  c.font='11px system-ui';c.lineWidth=1;
+  var xt=o.xticks||(o.xlog?decTicks(o.x[0],o.x[1],narrow?5:9):linTicks(o.x[0],o.x[1],narrow?4:6));
+  var yt=o.yticks||(o.ylog?(Math.log10(o.y[1]/o.y[0])>2.5?decTicks(o.y[0],o.y[1],6):niceLogTicks(o.y[0],o.y[1])):linTicks(o.y[0],o.y[1],5));
+  c.strokeStyle=css('--grid');c.fillStyle=css('--muted');
+  c.textAlign='center';c.textBaseline='top';
+  xt.forEach(function(t){var x=S.X(t);c.beginPath();c.moveTo(x,y1);c.lineTo(x,y0);c.stroke();
+    c.fillText(o.xfmt?o.xfmt(t):(o.xlog?p10(Math.round(Math.log10(t))):String(t)),x,y0+5);});
+  c.textAlign='right';c.textBaseline='middle';
+  yt.forEach(function(t){var y=S.Y(t);c.beginPath();c.moveTo(x0,y);c.lineTo(x1,y);c.stroke();
+    c.fillText(o.yfmt?o.yfmt(t):(o.ylog&&Math.log10(o.y[1]/o.y[0])>2.5?p10(Math.round(Math.log10(t))):String(+t.toFixed(2))),x0-5,y);});
+  c.strokeStyle=css('--axis');c.beginPath();c.moveTo(x0,y1);c.lineTo(x0,y0);c.lineTo(x1,y0);c.stroke();
+  c.fillStyle=css('--text-secondary');
+  if(o.xl){c.textAlign='right';c.textBaseline='bottom';c.fillText(o.xl,x1,H-1);}
+  if(o.yl){c.textAlign='left';c.textBaseline='top';var tw=c.measureText(o.yl).width;c.fillStyle=hexA(css('--surface-1').length===7?css('--surface-1'):'#fcfcfb',0.85);c.fillRect(x0+2,y1+1,tw+6,14);c.fillStyle=css('--text-secondary');c.fillText(o.yl,x0+5,y1+2);}
+  S.clip=function(){c.save();c.beginPath();c.rect(x0,y1,x1-x0,y0-y1);c.clip();};
+  S.unclip=function(){c.restore();};
+  return S;
+}
+function curve(S,f,col,o){
+  o=o||{};var c=S.c,lo=o.from!=null?o.from:S.o.x[0],hi=o.to!=null?o.to:S.o.x[1],n=o.n||220,started=false;
+  if(lo>=hi)return;
+  S.clip();c.strokeStyle=col;c.lineWidth=o.w||2;c.setLineDash(o.dash||[]);c.globalAlpha=o.alpha==null?1:o.alpha;c.beginPath();
+  for(var i=0;i<=n;i++){var t=i/n,x=S.o.xlog?Math.pow(10,Math.log10(lo)+t*(Math.log10(hi)-Math.log10(lo))):lo+t*(hi-lo),y=f(x);
+    if(!isFinite(y)||(S.o.ylog&&y<=0)){started=false;continue;}
+    var py=cl(S.Y(y),-2000,4000);
+    if(!started){c.moveTo(S.X(x),py);started=true;}else c.lineTo(S.X(x),py);}
+  c.stroke();c.setLineDash([]);c.globalAlpha=1;S.unclip();
+}
+function dot(S,x,y,col,r,hollow){var c=S.c;if(!isFinite(y)||!isFinite(x))return;var px=S.X(x),py=S.Y(y);
+  if(px<S.x0-1||px>S.x1+1||py<S.y1-1||py>S.y0+1)return;
+  c.beginPath();c.arc(px,py,r||4.5,0,7);if(hollow){c.lineWidth=2;c.strokeStyle=col;c.fillStyle=css('--surface-1');c.fill();c.stroke();}else{c.fillStyle=col;c.fill();}}
+function star(S,x,y,col,r){var c=S.c,px=S.X(x),py=S.Y(y);r=r||7;if(!isFinite(py))return;c.beginPath();
+  for(var i=0;i<10;i++){var a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*0.45:r;c.lineTo(px+rr*Math.cos(a),py+rr*Math.sin(a));}c.closePath();c.fillStyle=col;c.fill();}
+function vline(S,x,col,dash){var c=S.c,px=S.X(x);if(px<S.x0||px>S.x1)return;c.strokeStyle=col;c.lineWidth=1.2;c.setLineDash(dash||[4,4]);c.beginPath();c.moveTo(px,S.y1);c.lineTo(px,S.y0);c.stroke();c.setLineDash([]);}
+function hline(S,y,col,dash){var c=S.c,py=S.Y(y);if(py<S.y1||py>S.y0)return;c.strokeStyle=col;c.lineWidth=1.2;c.setLineDash(dash||[4,4]);c.beginPath();c.moveTo(S.x0,py);c.lineTo(S.x1,py);c.stroke();c.setLineDash([]);}
+function txt(S,s,x,y,col,al,bl,dx,dy){var c=S.c;c.font='11.5px system-ui';c.fillStyle=col||css('--text-secondary');c.textAlign=al||'left';c.textBaseline=bl||'middle';
+  var px=S.X(x)+(dx||0),py=S.Y(y)+(dy||0);c.fillText(s,px,py);}
+function seg(btnBox,cb){$$(btnBox+' button').forEach(function(b){b.addEventListener('click',function(){
+  $$(btnBox+' button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});cb(b);});});}
+
+/* ══════ 데모 1 ══════ */
+function drawD1(){
+  var a=+$('#d1a').value,k=Math.pow(10,+$('#d1k').value),N0=1e4,N1=N0*k;
+  $('#d1av').textContent=fmt(a,3);$('#d1kv').textContent=times(k);
+  function f(N){return 5*Math.pow(N/1e3,-a);}
+  var A=frame($('#d1lin'),{x:[0,1e9],y:[0,5.5],xticks:[0,5e8,1e9],xfmt:function(t){return t?human(t):'0';},yticks:[0,1,2,3,4,5],xl:'N',yl:'L'});
+  curve(A,f,css('--s1'),{from:1e3,to:1e9,n:400,_log:true});
+  dot(A,N0,f(N0),css('--s2'));dot(A,N1,f(N1),css('--s2'));
+  var ymin=f(1e9)*0.8;
+  var B=frame($('#d1log'),{x:[1e3,1e9],xlog:true,y:[ymin,6],ylog:true,xl:'N (로그)',yl:'L (로그)'});
+  curve(B,f,css('--s1'));
+  dot(B,N0,f(N0),css('--s2'));dot(B,N1,f(N1),css('--s2'));
+  $('#d1out').innerHTML='<span>N을 k배 하면 loss는<b>× '+fmt(Math.pow(k,-a),3)+'</b></span>'+
+    '<span>N을 2배 하면<b>× '+fmt(Math.pow(2,-a),3)+'</b></span>'+
+    '<span>loss를 절반으로 만들려면 N을<b>'+(Math.pow(2,1/a)>1e6?sci(Math.pow(2,1/a))+'배':times(Math.pow(2,1/a)))+'</b></span>'+
+    '<span>로그-로그 기울기<b>−'+fmt(a,3)+'</b></span>';
+}
+/* 보통 축은 x를 선형으로 샘플하면 왼쪽 끝이 뭉개지므로 로그 간격으로 다시 그린다 */
+(function(){var orig=curve;curve=function(S,f,col,o){if(o&&o._log&&!S.o.xlog){
+  var c=S.c,lo=o.from,hi=o.to,n=o.n||300;S.clip();c.strokeStyle=col;c.lineWidth=2;c.beginPath();
+  for(var i=0;i<=n;i++){var x=Math.pow(10,Math.log10(lo)+i/n*(Math.log10(hi)-Math.log10(lo))),py=cl(S.Y(f(x)),-2000,4000);if(i)c.lineTo(S.X(x),py);else c.moveTo(S.X(x),py);}
+  c.stroke();S.unclip();return;}return orig(S,f,col,o);};})();
+['#d1a','#d1k'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD1));});
+
+/* ══════ 데모 2 ══════ */
+var D2={
+  N:{f:LN,x:[1e3,1e12],obs:[768,1.5e9],lab:'N (임베딩 제외 파라미터)',a:K.aN,show:function(v){return human(v);},xl:'N'},
+  D:{f:LD,x:[1e7,1e13],obs:[2.2e7,2.3e10],lab:'D (토큰)',a:K.aD,show:function(v){return human(v)+' 토큰';},xl:'D (토큰)'},
+  C:{f:LCmin,x:[1e-9,1e4],obs:[1e-8,1],lab:'C_min (PF-days)',a:K.aCmin,show:function(v){return sci(v)+' PF-days';},xl:'C_min (PF-days)'}
+};
+var d2m='N';
+function d2val(){var m=D2[d2m],t=+$('#d2x').value/1000;return Math.pow(10,Math.log10(m.x[0])+t*(Math.log10(m.x[1])-Math.log10(m.x[0])));}
+function drawD2(){
+  var m=D2[d2m],v=d2val();$('#d2lab').textContent=m.lab;$('#d2xv').textContent=m.show(v);
+  var S=frame($('#d2cv'),{x:m.x,xlog:true,y:[1.1,8],ylog:true,xl:m.xl,yl:'테스트 loss (nats)'});
+  S.clip();S.c.fillStyle=hexA(css('--s1'),0.06);S.c.fillRect(S.X(m.obs[0]),S.y1,S.X(m.obs[1])-S.X(m.obs[0]),S.y0-S.y1);S.unclip();
+  curve(S,m.f,css('--s1'),{from:m.obs[0],to:m.obs[1],w:2.5});
+  curve(S,m.f,css('--s1'),{from:m.x[0],to:m.obs[0],dash:[5,5],w:1.6});
+  curve(S,m.f,css('--s1'),{from:m.obs[1],to:m.x[1],dash:[5,5],w:1.6});
+  var L=m.f(v);vline(S,v,css('--axis'));dot(S,v,L,css('--s2'),5.5);
+  var inObs=v>=m.obs[0]&&v<=m.obs[1];
+  txt(S,'측정 범위',Math.sqrt(m.obs[0]*m.obs[1]),7.2,css('--muted'),'center');
+  $('#d2out').innerHTML='<span>예측 loss<b>'+fmt(L,3)+' nats</b></span><span>퍼플렉시티 e<sup>L</sup><b>'+fmt(Math.exp(L),1)+'</b></span>'+
+    '<span>10배 늘리면<b>× '+fmt(Math.pow(10,-m.a),3)+'</b></span><span>구간<b style="color:'+(inObs?'var(--s3)':'var(--s2)')+'">'+(inObs?'측정 범위 안':'외삽')+'</b></span>';
+}
+seg('#d2btn',function(b){d2m=b.dataset.m;$('#d2x').value=d2m==='N'?680:d2m==='D'?550:620;drawD2();});
+$('#d2x').addEventListener('input',onFrame(drawD2));
+
+/* ══════ 데모 3 ══════ */
+var d3mode='k',d3seed=11;
+function trueL3(N){return d3mode==='k'?LN(N):CH.E+CH.A/Math.pow(N,CH.al);}
+function drawD3(){
+  var lo=+$('#d3lo').value,hi=+$('#d3hi').value,sg=+$('#d3n').value,tg=Math.pow(10,+$('#d3t').value);
+  if(hi<lo+0.5){hi=lo+0.5;$('#d3hi').value=hi;}
+  $('#d3lov').textContent=human(Math.pow(10,lo));$('#d3hiv').textContent=human(Math.pow(10,hi));$('#d3nv').textContent=fmt(sg,3);$('#d3tv').textContent=human(tg);
+  var r=rng(d3seed),xs=[],ys=[];
+  for(var i=0;i<10;i++){var N=Math.pow(10,lo+(hi-lo)*i/9);xs.push(N);ys.push(Math.max(0.05,trueL3(N)+sg*gauss(r)));}
+  var fit=fitLogLog(xs,ys),pred=fit.f(tg),tru=trueL3(tg);
+  var xr=d3mode==='k'?[1e3,1e13]:[1e6,1e13], yr=d3mode==='k'?[1.2,8]:[1.5,6];
+  var S=frame($('#d3cv'),{x:xr,xlog:true,y:yr,ylog:true,xl:'N',yl:'loss (nats)'});
+  S.c.fillStyle=hexA(css('--s1'),0.06);S.c.fillRect(S.X(xs[0]),S.y1,S.X(xs[9])-S.X(xs[0]),S.y0-S.y1);
+  curve(S,trueL3,css('--muted'),{w:1.6});
+  curve(S,fit.f,css('--s2'),{w:2,dash:[6,4]});
+  vline(S,tg,css('--axis'));
+  xs.forEach(function(N,i){dot(S,N,ys[i],css('--s1'),4);});
+  dot(S,tg,tru,css('--muted'),5,true);star(S,tg,pred,css('--s2'),8);
+  var err=(pred-tru)/tru*100;
+  var aTxt=d3mode==='k'?fmt(K.aN,3):'곡선 (하나의 α 없음)';
+  $('#d3out').innerHTML='<span>맞춘 기울기 α̂<b>'+fmt(-fit.slope,4)+'</b></span><span>참 α<b>'+aTxt+'</b></span>'+
+    '<span>예측 loss<b>'+fmt(pred,3)+'</b></span><span>참 loss<b>'+fmt(tru,3)+'</b></span>'+
+    '<span>예측 오차<b style="color:'+(Math.abs(err)<2?'var(--s3)':'var(--s8)')+'">'+(err>0?'+':'')+fmt(err,1)+'%</b></span>'+
+    '<span>외삽 거리<b>'+times(tg/xs[9])+'</b></span>';
+}
+seg('#d3btn',function(b){d3mode=b.dataset.m;
+  if(d3mode==='f'){$('#d3lo').min=6;$('#d3hi').min=6.5;if(+$('#d3lo').value<7)$('#d3lo').value=7;if(+$('#d3hi').value<9)$('#d3hi').value=9;}
+  else{$('#d3lo').min=3;$('#d3hi').min=3.5;$('#d3lo').value=4;$('#d3hi').value=7;}
+  drawD3();});
+['#d3lo','#d3hi','#d3n','#d3t'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD3));});
+$('#d3re').addEventListener('click',function(){d3seed=(d3seed*7919+13)%100003;drawD3();});
+
+/* ══════ 데모 4 ══════ */
+var VOC=50257,CTX=1024;
+function drawD4(){
+  var N=Math.pow(10,+$('#d4N').value),nl=+$('#d4l').value,d=Math.sqrt(N/(12*nl)),emb=(VOC+CTX)*d,share=emb/(emb+N),asp=d/nl;
+  $('#d4Nv').textContent=human(N);$('#d4lv').textContent=nl;
+  function shareAt(n){var dd=Math.cbrt(n*asp/12);return (VOC+CTX)*dd/((VOC+CTX)*dd+n);}
+  var S=frame($('#d4cv'),{x:[1e4,1e11],xlog:true,y:[0,1.12],yticks:[0,0.25,0.5,0.75,1],yfmt:function(t){return Math.round(t*100)+'%';},xl:'N (임베딩 제외)',yl:'전체 중 임베딩 비중'});
+  curve(S,shareAt,css('--s1'));
+  vline(S,N,css('--axis'));dot(S,N,share,css('--s2'),5.5);
+  $('#d4out').innerHTML='<span>d<sub>model</sub><b>'+Math.round(d).toLocaleString('en-US')+'</b></span><span>폭/깊이 d/n<b>'+fmt(asp,1)+'</b></span>'+
+    '<span>임베딩 파라미터<b>'+human(emb)+'</b></span><span>전체 중 임베딩<b>'+fmt(share*100,1)+'%</b></span>'+
+    '<span>어텐션 점수 연산 n<sub>ctx</sub>/12d<b>'+fmt(CTX/(12*d)*100,1)+'%</b></span>';
+  var pp=+$('#d4p').value;$('#d4pv').textContent=fmt(pp,1)+'%';
+  var m=Math.pow(1+pp/100,1/K.aCmin);
+  $('#d4out2').innerHTML='<span>같은 loss를 되찾는 데 드는 연산<b>× '+fmt(m,2)+'</b></span><span>추가 연산<b>+'+fmt((m-1)*100,0)+'%</b></span><span>근거<b style="font-size:14px">(1 + x)<sup>1/0.050</sup></b></span>';
+}
+$$('#d4pre button').forEach(function(b){b.addEventListener('click',function(){var n=+b.dataset.n,d=+b.dataset.d;
+  $('#d4l').value=n;$('#d4N').value=Math.log10(12*n*d*d);drawD4();});});
+['#d4N','#d4l','#d4p'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD4));});
+
+/* ══════ 데모 5 ══════ */
+var D5LIST=[21e6,43e6,86e6,172e6,344e6,688e6,1.4e9,22e9];
+function drawD5(){
+  var D=Math.pow(10,+$('#d5D').value),N=Math.pow(10,+$('#d5N').value);
+  $('#d5Dv').textContent=human(D);$('#d5Nv').textContent=human(N);
+  var S=frame($('#d5cv'),{x:[1e6,1e11],xlog:true,y:[1.5,5],ylog:true,xl:'N (임베딩 제외)',yl:'조기 종료 테스트 loss'});
+  D5LIST.forEach(function(dd){curve(S,function(n){return LND(n,dd);},css('--muted'),{w:1,alpha:0.45});});
+  curve(S,function(n){return LND(n,Infinity);},css('--text-secondary'),{w:1.4,dash:[5,4]});
+  curve(S,function(n){return LND(n,D);},css('--s1'),{w:2.6});
+  var Nb=Math.pow(D/5e3,1/0.74);vline(S,Nb,css('--s2'),[3,3]);
+  txt(S,'과적합 경계 (식 4.4)',Nb,1.6,css('--s2'),Nb>1e10?'right':'left',null,Nb>1e10?-5:5);
+  dot(S,N,LND(N,D),css('--s2'),5.5);
+  var dl=deltaL(N,D),ss=Sstop(N,D);
+  $('#d5out').innerHTML='<span>L(N, D)<b>'+fmt(LND(N,D),3)+'</b></span><span>L(N, ∞)<b>'+fmt(LND(N,Infinity),3)+'</b></span>'+
+    '<span>과적합 δL<b style="color:'+(dl>0.021?'var(--s8)':'var(--s3)')+'">'+fmt(dl*100,2)+'%</b></span>'+
+    '<span>이 N에 필요한 D (식 4.4)<b>'+human(Dneeded(N))+'</b></span>'+
+    '<span>이 D로 괜찮은 최대 N<b>'+human(Nb)+'</b></span>'+
+    '<span>조기 종료 스텝 하한 (식 5.7)<b>'+(ss>1e9?'≫ 10⁹':Math.round(ss).toLocaleString('en-US'))+'</b></span>';
+}
+['#d5D','#d5N'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD5));});
+
+/* ══════ 데모 6 ══════ */
+var D6N=[1e5,1e6,1e7,1e8,1e9,1e10];
+function drawD6(){
+  var Lt=+$('#d6L').value;$('#d6Lv').textContent=fmt(Lt,2);
+  var S=frame($('#d6cv'),{x:[1e2,1e7],xlog:true,y:[2,7],ylog:true,xl:'S_min (스텝)',yl:'테스트 loss'});
+  var rows=[],best=-1,bestC=Infinity;
+  D6N.forEach(function(N,i){var t=0.3+0.7*i/(D6N.length-1);
+    curve(S,function(s){return LNS(N,s);},hexA(css('--s1'),t),{w:2});
+    txt(S,human(N),1e7,LNS(N,1e7),css('--muted'),'right','bottom',-2,-2);
+    var st=stepsTo(N,Lt),B=Bcrit(Lt),C=isFinite(st)?6*N*B*st/K.PFDAY:Infinity;
+    rows.push({N:N,Linf:LNinf_S(N),S:st,E:B*st,C:C});
+    if(C<bestC){bestC=C;best=i;}
+    if(isFinite(st))dot(S,st,Lt,css('--s2'),4);
+  });
+  hline(S,Lt,css('--s2'),[5,4]);
+  $('#d6tab').innerHTML=rows.map(function(r,i){return '<tr'+(i===best?' class="hl"':'')+'><td>'+human(r.N)+'</td><td class="num">'+fmt(r.Linf,3)+'</td><td class="num">'+(isFinite(r.S)?(r.S>1e9?sci(r.S):Math.round(r.S).toLocaleString('en-US')):'도달 불가')+'</td><td class="num">'+(isFinite(r.E)?human(r.E):'—')+'</td><td class="num">'+(isFinite(r.C)?sci(r.C,2):'—')+'</td></tr>';}).join('');
+  var Ne=Neff_for(Lt),Se=stepsTo(Ne,Lt);
+  $('#d6out').innerHTML='<span>임계 배치 B<sub>crit</sub>(L)<b>'+human(Bcrit(Lt))+' 토큰</b></span>'+
+    '<span>연속 최적 크기 N<sub>eff</sub> (식 B.5)<b>'+human(Ne)+'</b></span>'+
+    '<span>그 모델의 수렴 loss 대비<b>+'+fmt((Lt/LNinf_S(Ne)-1)*100,1)+'%</b></span>'+
+    '<span>그때 스텝<b>'+Math.round(Se).toLocaleString('en-US')+'</b></span>';
+}
+$('#d6L').addEventListener('input',onFrame(drawD6));
+
+/* ══════ 데모 7 ══════ */
+var D7P=[['GPT-3',175e9,300e9],['Gopher',280e9,300e9],['MT-NLG',530e9,270e9],['LaMDA',137e9,168e9],['Chinchilla',70e9,1.4e12]];
+var d7peak=312e12;
+$('#d7pre').innerHTML=D7P.map(function(p,i){return '<button type="button" data-i="'+i+'">'+p[0]+'</button>';}).join('');
+$$('#d7pre button').forEach(function(b){b.addEventListener('click',function(){var p=D7P[+b.dataset.i];$('#d7N').value=Math.log10(p[1]);$('#d7D').value=Math.log10(p[2]);drawD7();});});
+function drawD7(){
+  var N=Math.pow(10,+$('#d7N').value),D=Math.pow(10,+$('#d7D').value),C=flops6ND(N,D);
+  $('#d7Nv').textContent=human(N);$('#d7Dv').textContent=human(D);
+  var S=setup($('#d7cv')),c=S.c,W=S.w,narrow=W<480,L=narrow?82:100,R=narrow?14:24,lo=20,hi=26;
+  function bx(v){return L+(W-L-R)*(Math.log10(v)-lo)/(hi-lo);}
+  c.font='11px system-ui';c.textBaseline='top';c.textAlign='center';c.strokeStyle=css('--grid');c.fillStyle=css('--muted');
+  var top=8,rowH=30,items=D7P.map(function(p){return [p[0],flops6ND(p[1],p[2]),css('--axis')];}).concat([['지금 값',C,css('--s2')]]);
+  var bottom=top+items.length*rowH;
+  for(var e=lo;e<=hi;e++){var x=bx(Math.pow(10,e));c.beginPath();c.moveTo(x,top);c.lineTo(x,bottom);c.stroke();if(!narrow||e%2===0)c.fillText(p10(e),x,bottom+4);}
+  c.textAlign='right';c.fillStyle=css('--text-secondary');c.fillText('학습 FLOP (6ND, 로그)',W-R,bottom+18);
+  items.forEach(function(it,i){var y=top+i*rowH+rowH/2;c.fillStyle=it[2];var w=Math.max(2,bx(cl(it[1],1e20,1e26))-L);c.fillRect(L,y-9,w,18);
+    c.textBaseline='middle';c.textAlign='right';c.fillStyle=css('--text-primary');c.fillText(it[0],L-6,y);
+    c.textAlign='left';var lx=L+w+5;var s=sci(it[1],2);if(lx+60>W){c.textAlign='right';lx=L+w-5;c.fillStyle=css('--surface-1');}c.fillText(s,lx,y);});
+  $('#d7out').innerHTML='<span>학습 연산 C = 6ND<b>'+sci(C,2)+' FLOP</b></span><span>PF-days<b>'+Math.round(C/K.PFDAY).toLocaleString('en-US')+'</b></span>'+
+    '<span>토큰 / 파라미터<b>'+fmt(D/N,1)+'</b></span><span>Gopher(5.04 × 10²³) 대비<b>'+times(C/5.04e23)+'</b></span>';
+  var g=Math.round(Math.pow(10,+$('#d7g').value)),mfu=+$('#d7m').value/100;$('#d7gv').textContent=g.toLocaleString('en-US');$('#d7mv').textContent=Math.round(mfu*100)+'%';
+  var sec=C/(g*d7peak*mfu),gh=C/(d7peak*mfu)/3600;
+  $('#d7out2').innerHTML='<span>벽시계 시간<b>'+(sec/86400>=1?fmt(sec/86400,1)+'일':fmt(sec/3600,1)+'시간')+'</b></span><span>GPU-시간<b>'+(gh>=1e6?sci(gh,2):Math.round(gh).toLocaleString('en-US'))+'</b></span>';
+}
+seg('#d7gpu',function(b){d7peak=+b.dataset.f;drawD7();});
+['#d7N','#d7D','#d7g','#d7m'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD7));});
+
+/* ══════ 데모 8 ══════ */
+function drawD8(){
+  var C=Math.pow(10,+$('#d8c').value),al=kaplanAlloc(C);$('#d8cv_').textContent=sci(C,1);
+  $('#d8out').innerHTML='<span>최적 N<b>'+human(al.N)+'</b></span><span>배치 B<b>'+human(al.B)+' 토큰</b></span><span>스텝 S<b>'+Math.round(al.S).toLocaleString('en-US')+'</b></span>'+
+    '<span>데이터 D (1 epoch)<b>'+human(al.D)+' 토큰</b></span><span>예측 loss L(C<sub>min</sub>)<b>'+fmt(al.L,3)+'</b></span>';
+  var r=Math.pow(10,+$('#d8r').value);$('#d8rv').textContent=fmt(r,2)+'배';
+  var S=frame($('#d8cv'),{x:[0.3,10],xlog:true,xticks:[0.3,0.6,1,2.2,5,10],xfmt:function(t){return t+'×';},y:[0,3],yticks:[0,0.5,1,1.2,1.5,2,2.5,3],xl:'N / N_eff',yl:'비율'});
+  S.c.fillStyle=hexA(css('--s3'),0.10);S.c.fillRect(S.X(0.6),S.y1,S.X(2.2)-S.X(0.6),S.y0-S.y1);
+  hline(S,1.2,css('--s3'),[3,3]);hline(S,1,css('--axis'),[2,3]);
+  curve(S,excessC,css('--s1'),{w:2.2,n:400});curve(S,excessS,css('--s2'),{w:2.2,n:400});
+  vline(S,r,css('--axis'));dot(S,r,excessC(r),css('--s1'),5);dot(S,r,excessS(r),css('--s2'),5);
+  txt(S,'+20% 이내',Math.sqrt(0.6*2.2),2.85,css('--s3'),'center');
+  var ec=excessC(r),es=excessS(r);
+  $('#d8out2').innerHTML='<span>필요 연산<b>'+(isFinite(ec)?(ec>=1?'+':'')+fmt((ec-1)*100,0)+'%':'도달 불가')+'</b></span><span>필요 스텝<b>'+(isFinite(es)?(es>=1?'+':'')+fmt((es-1)*100,0)+'%':'—')+'</b></span>';
+}
+['#d8c','#d8r'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD8));});
+
+/* ══════ 데모 9 ══════ */
+var d9m='iso';
+var D9M=[['LaMDA',137e9,168e9],['GPT-3',175e9,300e9],['Jurassic',178e9,300e9],['Gopher',280e9,300e9],['MT-NLG',530e9,270e9],['Chinchilla',70e9,1.4e12]];
+var D9T3=[[400e6,1.92e19],[1e9,1.21e20],[10e9,1.23e22],[67e9,5.76e23],[175e9,3.85e24],[280e9,9.90e24],[520e9,3.43e25],[1e12,1.27e26],[10e12,1.30e28]];
+function drawD9(){
+  var C=Math.pow(10,+$('#d9c').value),o=chinOpt(C),kN=kaplanN_flops(C),kD=C/(6*kN),fN=C/(6*300e9),a1=chinA1(C);
+  $('#d9cv_').textContent=sci(C,2);
+  var leg;
+  if(d9m==='iso'){
+    var f=function(N){return Lchin(N,C/(6*N));};
+    var lo=Math.max(1e6,o.N/3e3),hi=Math.min(1e15,o.N*3e3),ymax=Math.min(f(lo),f(hi),o.L+1.2),ymin=o.L-0.08;
+    var S=frame($('#d9cv'),{x:[lo,hi],xlog:true,y:[ymin,Math.max(ymax,o.L+0.3)],xl:'N (파라미터), D = C / 6N',yl:'Chinchilla 식 (10) loss'});
+    curve(S,f,css('--s1'),{w:2.4});
+    vline(S,o.N,css('--s1'),[3,3]);
+    dot(S,a1,f(a1),css('--s3'),5.5,true);
+    dot(S,fN,f(fN),css('--muted'),5.5);
+    dot(S,kN,f(kN),css('--s2'),6);
+    dot(S,o.N,o.L,css('--s1'),6);
+    leg='<span><i class="dot" style="background:var(--s1)"></i><span>식 (10)의 최솟값</span></span><span><i class="dot" style="background:none;border:2px solid var(--s3)"></i><span>방법 1 (표 3, C<sup>0.50</sup>)</span></span><span><i class="dot" style="background:var(--s2)"></i><span>Kaplan 처방</span></span><span><i class="dot" style="background:var(--muted)"></i><span>토큰 300B 고정</span></span>';
+  }else{
+    var S=frame($('#d9cv'),{x:[1e17,1e27],xlog:true,y:[1e7,1e14],ylog:true,xl:'학습 FLOP',yl:'파라미터 N'});
+    curve(S,kaplanN_flops,css('--s2'),{w:2});
+    curve(S,function(c){return chinOpt(c).N;},css('--s1'),{w:2});
+    curve(S,chinA1,css('--s3'),{w:1.6,dash:[5,4]});
+    D9T3.forEach(function(p){dot(S,p[1],p[0],css('--s3'),3.5,true);});
+    vline(S,C,css('--axis'));
+    D9M.forEach(function(m){var cc=flops6ND(m[1],m[2]);dot(S,cc,m[1],m[0]==='Chinchilla'?css('--s4'):css('--text-secondary'),4.5);});
+    var ch=D9M[5],gp=D9M[3];
+    txt(S,'Chinchilla',flops6ND(ch[1],ch[2]),ch[1],css('--s4'),'left','top',6,4);
+    txt(S,'Gopher 외 4개',flops6ND(gp[1],gp[2]),gp[1],css('--text-secondary'),'right','bottom',-6,-4);
+    leg='<span><i style="background:var(--s2)"></i><span>Kaplan N ∝ C<sup>0.73</sup></span></span><span><i style="background:var(--s1)"></i><span>Chinchilla 방법 3 (식 4)</span></span><span><i class="dash" style="border-color:var(--s3)"></i><span>방법 1 (표 3 점)</span></span><span><i class="dot" style="background:var(--text-secondary)"></i><span>실제 모델 (표 1)</span></span>';
+  }
+  $('#d9leg').innerHTML=leg;
+  $('#d9out').innerHTML='<span>최적 N · 식 (10)<b>'+human(o.N)+'</b></span><span>최적 N · 방법 1<b>'+human(a1)+'</b></span>'+
+    '<span>방법 1 토큰 / 파라미터<b>'+fmt(C/(6*a1*a1),1)+'</b></span>'+
+    '<span>Kaplan 처방 N / D<b>'+human(kN)+' / '+human(kD)+'</b></span>'+
+    '<span>loss: 최적 · Kaplan · 300B 고정<b>'+fmt(o.L,3)+' · '+fmt(Lchin(kN,kD),3)+' · '+(fN>1e5?fmt(Lchin(fN,300e9),3):'—')+'</b></span>'+
+    '<span>Gopher vs Chinchilla (식 10)<b>'+fmt(Lchin(280e9,300e9),3)+' vs '+fmt(Lchin(70e9,1.4e12),3)+'</b></span>';
+}
+seg('#d9btn',function(b){d9m=b.dataset.m;drawD9();});
+$('#d9c').addEventListener('input',onFrame(drawD9));
+
+/* ══════ 데모 10 ══════ */
+function drawD10(){
+  var aC=+$('#d10a').value,aD=+$('#d10b').value;$('#d10av').textContent=fmt(aC,4);$('#d10bv').textContent=fmt(aD,4);
+  var S=frame($('#d10cv'),{x:[1e-8,1e10],xlog:true,y:[1,8],ylog:true,xl:'C_min (PF-days)',yl:'loss (nats)'});
+  var f1=function(C){return Math.pow(K.Ccmin/C,aC);},f2=function(C){return Math.pow(K.Dc/(4e10*Math.pow(C,0.26)),aD);};
+  curve(S,f1,css('--s1'),{w:2.4});curve(S,f2,css('--s2'),{w:2.4});
+  dot(S,1e4,1.7,css('--text-secondary'),6,true);txt(S,'식 (6.8)',1e4,1.7,css('--text-secondary'),'right','top',-7,6);
+  var x=crossing(aC,aD);
+  if(x&&x.C>1e-8&&x.C<1e10){dot(S,x.C,x.L,css('--s8'),6);vline(S,x.C,css('--s8'),[3,3]);}
+  $('#d10warn').textContent=x?'':'α_C ≤ 0.26·α_D 이면 두 선이 벌어지기만 해서 만나지 않습니다.';
+  $('#d10out').innerHTML=x?('<span>교차 C*<b>'+sci(x.C,1)+' PF-days</b></span><span>L*<b>'+fmt(x.L,2)+' nats</b></span><span>N* (표 6 처방)<b>'+human(x.N)+'</b></span><span>D* (식 6.7)<b>'+human(x.D)+' 토큰</b></span>'):'';
+}
+['#d10a','#d10b'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD10));});
+
+/* ══════ 퀴즈 ══════ */
+var QZ=[
+ {q:'α<sub>N</sub> ≈ 0.076일 때 파라미터 수를 2배로 하면 loss는?',o:['약 0.5배','약 0.95배','약 0.76배'],a:1,
+  e:'멱법칙에서 N을 k배 하면 loss는 k^−α배입니다. 2^−0.076 ≈ 0.95(1.2절). loss를 절반으로 만들려면 N이 약 9,000배 필요합니다.'},
+ {q:'논문이 N에서 임베딩 파라미터를 뺀 이유는?',o:['임베딩은 학습되지 않아서','빼야 층 수가 다른 모델들이 한 추세선으로 모이기 때문','연산량 계산을 단순하게 하려고'],a:1,
+  e:'그림 6. 임베딩을 포함하면 층 수에 따라 추세가 갈라지고, 빼면 하나로 모입니다. 작은 모델은 임베딩이 대부분이라 전체 파라미터 수가 실제 용량을 잘못 나타냅니다.'},
+ {q:'과적합을 피하면서 모델을 8배 키우려면 데이터는 대략 몇 배?',o:['8배','약 5배','64배'],a:1,
+  e:'식 (4.4) D ≳ 5×10³·N^0.74. 8^0.74 ≈ 4.7, 논문 요약의 “대략 5배”입니다.'},
+ {q:'Kaplan의 처방에서 연산 예산을 10배 늘리면 가장 많이 늘어나는 것은?',o:['모델 크기 (약 5배)','학습 스텝 수 (약 5배)','데이터 (약 5배)'],a:0,
+  e:'N ∝ C^0.73 → 10^0.73 ≈ 5.4배. 스텝은 C^0.03으로 거의 그대로이고, 데이터는 약 1.9배(대부분 배치 증가)입니다.'},
+ {q:'목표 loss에 연산을 가장 적게 쓰고 도달하는 모델은 학습을 어디서 멈추나?',o:['완전히 수렴할 때까지','수렴 loss보다 약 10% 높은 지점','수렴 loss의 2배'],a:1,
+  e:'식 (B.5): L = (1 + α_N/α_S)·L(N,∞), α_N/α_S ≈ 0.10. “수렴은 비효율적이다.”'},
+ {q:'70B 파라미터를 1.4T 토큰으로 학습하는 연산(6ND)은?',o:['약 5.9 × 10²³ FLOP','약 9.8 × 10²² FLOP','약 5.9 × 10²⁵ FLOP'],a:0,
+  e:'6 × 7×10¹⁰ × 1.4×10¹² = 5.88 × 10²³. Gopher(280B, 300B 토큰)의 5.04 × 10²³과 같은 급입니다.'},
+ {q:'Chinchilla 논문이 꼽은, Kaplan이 모델 크기를 과하게 키우라는 결론을 낸 원인은?',o:['멱법칙 대신 지수 함수를 써서','모든 모델에 같은 학습률 스케줄·토큰 수를 쓰고 중간 loss를 짧은 학습의 결과로 써서','임베딩 파라미터를 세지 않아서'],a:1,
+  e:'Chinchilla 2절. 코사인 스케줄이 끝나기 전의 loss는 그 길이에 맞춰 스케줄을 짠 학습보다 높아, 적은 데이터로 학습하는 효과가 과소평가되었습니다. 또 Kaplan의 실험은 대부분 1억 파라미터 아래였습니다.'}
+];
+(function(){
+  var box=$('#quiz'),score=0,done=0;
+  QZ.forEach(function(it,qi){
+    var d=document.createElement('div');d.className='q';
+    d.innerHTML='<h4>Q'+(qi+1)+'. '+it.q+'</h4>'+it.o.map(function(o,j){return '<label class="opt"><input type="radio" name="q'+qi+'" value="'+j+'">'+o+'</label>';}).join('')+'<div class="expl"></div>';
+    box.appendChild(d);
+    d.querySelectorAll('input').forEach(function(inp){inp.addEventListener('change',function(){
+      if(d.dataset.done)return;d.dataset.done=1;done++;
+      var j=+inp.value,ok=j===it.a;if(ok)score++;
+      d.querySelectorAll('.opt').forEach(function(l,x){if(x===it.a)l.classList.add('correct');else if(x===j)l.classList.add('wrong');});
+      var ex=d.querySelector('.expl');ex.textContent=(ok?'정답! ':'오답. ')+it.e;ex.classList.add('show');if(!ok)ex.classList.add('bad');
+      $('#quizScore').textContent=done+'문제 중 '+score+'개 정답'+(done===QZ.length?' — 끝!':'');
+    });});
+  });
+})();
+
+/* ══════ 테마·초기화 ══════ */
+function drawAll(){drawD1();drawD2();drawD3();drawD4();drawD5();drawD6();drawD7();drawD8();drawD9();drawD10();}
+var tbtn=$('#themeBtn');
+if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.setAttribute('data-theme','dark');
+function syncBtn(){tbtn.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'◑ 라이트':'◐ 다크';}
+tbtn.addEventListener('click',function(){var d=document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme',d?'light':'dark');cssCache={};syncBtn();drawAll();});
+syncBtn();drawAll();
+var rz,lastW=document.documentElement.clientWidth;
+window.addEventListener('resize',function(){clearTimeout(rz);rz=setTimeout(function(){
+  var w=document.documentElement.clientWidth;if(w===lastW)return;lastW=w;drawAll();},120);});
+function km(){if(window.renderMathInElement&&!document.querySelector('.katex'))renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});}
+document.addEventListener('DOMContentLoaded',km);
+window.addEventListener('load',km);
+</script>
+</body>
+</html>
