@@ -257,10 +257,22 @@ sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
 
 <!-- ───────── 4 ───────── -->
 <h2 id="s4">4. 크기만 중요하고 모양은 거의 상관없다</h2>
-<p>같은 파라미터 수라도 층을 깊게 쌓을 수도, 넓게 펼칠 수도 있습니다. 논문은 N을 고정한 채 층 수, 폭, 헤드 수, FFN 비율을 하나씩 바꿔 보고 loss가 넓은 범위에서 <strong>몇 % 안쪽</strong>으로만 움직인다는 것을 보였습니다(그림 5). 층 수 대 폭의 비율이 40배 달라져도 영향이 작았고, (층, d<sub>model</sub>) = (6, 4288)인 모델이 GPT-2의 (48, 1600)과 loss 3% 안쪽으로 맞섰습니다.</p>
+<p>같은 파라미터 수라도 층을 깊게 쌓을 수도, 넓게 펼칠 수도 있습니다. 논문은 N을 고정한 채 층 수, 폭, 헤드 수, FFN 비율을 하나씩 바꿔 보고 loss가 넓은 범위에서 <strong>몇 % 안쪽</strong>으로만 움직인다는 것을 보였습니다(논문 그림 5, 아래에 다시 그림). 층 수 대 폭의 비율이 40배 달라져도 영향이 작았고, (층, d<sub>model</sub>) = (6, 4288)인 모델이 GPT-2의 (48, 1600)과 loss 3% 안쪽으로 맞섰습니다.</p>
 <div class="eq">
   $$N \approx 2\,d_{\text{model}}\,n_{\text{layer}}\,(2d_{\text{attn}} + d_{\text{ff}}) = 12\,n_{\text{layer}}\,d_{\text{model}}^2$$
   <span class="note">식 (2.1). d<sub>attn</sub> = d<sub>ff</sub>/4 = d<sub>model</sub>인 표준 설정에서 편향과 LayerNorm 같은 작은 항은 뺍니다. 임베딩 (n<sub>vocab</sub> + n<sub>ctx</sub>)·d<sub>model</sub>도 N에 넣지 않습니다.</span>
+</div>
+<div class="demo">
+  <h4>논문 그림 5 다시 그리기 · N은 고정, 모양만 바꾸기</h4>
+  <p class="cap">세로축은 같은 N에서 가장 좋았던 모양 대비 loss가 몇 % 나빠졌는지입니다. 점 값은 원문 그림을 눈으로 읽어 옮긴 근삿값입니다.</p>
+  <div class="btns top" id="f5btn">
+    <button type="button" data-p="0" aria-pressed="false">FFN 비율</button>
+    <button type="button" data-p="1" aria-pressed="true">폭/깊이 비율</button>
+    <button type="button" data-p="2" aria-pressed="false">헤드 크기</button>
+  </div>
+  <canvas id="f5cv" height="230"></canvas>
+  <div class="legend" id="f5leg"></div>
+  <div class="readout" id="f5out"></div>
 </div>
 <p>임베딩을 빼는 것이 이 논문의 작지만 결정적인 선택이었습니다. 그림 6 왼쪽처럼 임베딩까지 세면 층 수가 다른 모델들이 서로 다른 선 위에 흩어지고, 빼면 한 선으로 모입니다. 작은 모델일수록 임베딩이 전체의 대부분을 차지하기 때문입니다.</p>
 
@@ -722,6 +734,41 @@ $$('#d4pre button').forEach(function(b){b.addEventListener('click',function(){va
   $('#d4l').value=n;$('#d4N').value=Math.log10(12*n*d*d);drawD4();});});
 ['#d4N','#d4l','#d4p'].forEach(function(s){$(s).addEventListener('input',onFrame(drawD4));});
 
+/* ══════ 그림 5 (원문 그래프에서 읽은 근삿값) ══════ */
+var F5=[
+  {x:[0.35,60],xl:'FFN 비율 d_ff / d_model',note:'N = 50M. 표준값은 4입니다.',
+   s:[{n:'d_model / n_head = 64',p:[[0.5,0.7],[1,0],[2,0.05],[4,0.3],[8,1.8],[22,4.7],[40,8.4]]},
+      {n:'n_head = 8',p:[[8,1.55],[22,4.8],[40,7.8]]}],
+   say:'FFN 층을 d_model의 1~4배로 두면 차이가 0.3% 안쪽입니다. 10배를 넘기면 그제야 몇 % 나빠집니다.'},
+  {x:[2,2500],xl:'폭/깊이 비율 d_model / n_layer',note:'',
+   s:[{n:'50M',p:[[4.1,2.7],[11.5,1.4],[33,0.5],[51,0],[92,0.1],[258,0.7],[390,2.1],[730,4.6]]},
+      {n:'274M',p:[[2.6,1.1],[25,0],[210,0.5],[1700,7.9]]},
+      {n:'1.5B',p:[[3.9,2.1],[13,0.5],[34,0],[272,0.6],[720,2.8]]}],
+   band:[9,320],
+   say:'원문이 두 세로 막대로 표시한 구간(초록 띠, 폭/깊이 비율 약 10~300)에서는 세 크기 모두 loss 차이가 1.5% 안쪽입니다. 논문은 이를 “비율이 40배 달라져도”라고 적었습니다. 아주 얕고 넓거나 아주 깊고 좁을 때만 크게 나빠집니다.'},
+  {x:[10,320],xl:'헤드 크기 d_model / n_head',note:'N = 25M.',
+   s:[{n:'d_model = 256',p:[[16,0.05],[32,0],[64,0.15],[128,1.15],[256,1.8]]},
+      {n:'d_model = 512',p:[[16,0.5],[32,0.15],[64,0.15],[128,0],[256,1.6]]},
+      {n:'d_model = 1024',p:[[16,0.55],[32,0.15],[64,0],[128,0],[256,0.8]]}],
+   say:'헤드 크기를 16에서 256까지 16배 바꿔도 차이는 2% 안쪽입니다. 원문은 이 패널에 “1% loss 증가는 22%의 추가 연산으로 메울 수 있다”는 눈금을 붙였습니다.'}
+];
+var f5p=1;
+function drawF5(){
+  var P=F5[f5p],cols=[css('--s1'),css('--s2'),css('--s3')];
+  var S=frame($('#f5cv'),{x:P.x,xlog:true,y:[-0.6,9],yticks:[0,2,4,6,8],yfmt:function(t){return t+'%';},xl:P.xl,yl:'loss 증가'});
+  var c=S.c;
+  if(P.band){S.clip();c.fillStyle=hexA(css('--s3'),0.08);c.fillRect(S.X(P.band[0]),S.y1,S.X(P.band[1])-S.X(P.band[0]),S.y0-S.y1);S.unclip();
+    txt(S,'비슷한 성능',Math.sqrt(P.band[0]*P.band[1]),8.3,css('--muted'),'center');}
+  P.s.forEach(function(se,i){
+    S.clip();c.strokeStyle=cols[i];c.lineWidth=2;c.beginPath();
+    se.p.forEach(function(q,j){var px=S.X(q[0]),py=S.Y(q[1]);if(j)c.lineTo(px,py);else c.moveTo(px,py);});c.stroke();S.unclip();
+    se.p.forEach(function(q){dot(S,q[0],q[1],cols[i],3.8);});
+  });
+  $('#f5leg').innerHTML=P.s.map(function(se,i){return '<span><i class="dot" style="background:'+cols[i]+'"></i><span>'+se.n.replace(/_(\w+)/g,'<sub>$1</sub>')+'</span></span>';}).join('');
+  $('#f5out').innerHTML='<span style="flex-basis:100%">'+(P.note?P.note+' ':'')+P.say.replace(/_(\w+)/g,'<sub>$1</sub>')+'</span>';
+}
+seg('#f5btn',function(b){f5p=+b.dataset.p;drawF5();});
+
 /* ══════ 데모 5 ══════ */
 var D5LIST=[21e6,43e6,86e6,172e6,344e6,688e6,1.4e9,22e9];
 function drawD5(){
@@ -901,7 +948,7 @@ var QZ=[
 })();
 
 /* ══════ 테마·초기화 ══════ */
-function drawAll(){drawD1();drawD2();drawD3();drawD4();drawD5();drawD6();drawD7();drawD8();drawD9();drawD10();}
+function drawAll(){drawD1();drawD2();drawD3();drawF5();drawD4();drawD5();drawD6();drawD7();drawD8();drawD9();drawD10();}
 var tbtn=$('#themeBtn');
 if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.setAttribute('data-theme','dark');
 function syncBtn(){tbtn.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'◑ 라이트':'◐ 다크';}
