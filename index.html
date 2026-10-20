@@ -126,6 +126,7 @@ nav.toc a:hover{color:var(--s1)}
 .quiz-score{font-size:15px;font-weight:700;margin-top:14px}
 .tog{position:fixed;top:14px;right:14px;z-index:10;border-radius:999px;padding:7px 13px;
   background:var(--surface-1);border:1px solid var(--border);font-size:12.5px}
+@media (max-width:640px){.tog{position:absolute}}
 footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
 footer a{color:var(--text-secondary)}
 .refs{font-size:13px;color:var(--text-secondary);line-height:1.7}
@@ -174,6 +175,7 @@ sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
 
 <!-- ───────── 1 ───────── -->
 <h2 id="s1">1. 로그-로그 그래프의 직선</h2>
+<p><strong>멱법칙</strong>(power law)은 한 값이 다른 값의 거듭제곱에 비례하는 관계, 즉 \(y = a\,x^{k}\) 꼴입니다.</p>
 <p>논문의 그래프는 거의 전부 가로축과 세로축이 모두 로그입니다. 이유는 멱법칙 \(L = (N_c/N)^{\alpha}\)에 로그를 씌우면 바로 보입니다.</p>
 <div class="eq">
   $$\log L = \alpha \log N_c \;-\; \alpha \log N$$
@@ -318,7 +320,7 @@ sup.fn a{text-decoration:none;font-weight:700;padding:0 2px}
   <div class="ctrls">
     <div class="ctrl"><label><span>목표 loss (nats)</span> <b id="d6Lv"></b></label><input type="range" id="d6L" min="2.3" max="4.6" step="0.01" value="3.2"></div>
   </div>
-  <div class="tw"><table><thead><tr><th>N</th><th class="num">수렴 loss</th><th class="num">필요 스텝</th><th class="num">처리 토큰</th><th class="num">PF-days</th></tr></thead><tbody id="d6tab"></tbody></table></div>
+  <div class="tw"><table><thead><tr><th>N</th><th class="num">수렴 loss</th><th class="num">스텝</th><th class="num">토큰</th><th class="num">PF-days</th></tr></thead><tbody id="d6tab"></tbody></table></div>
   <div class="readout" id="d6out"></div>
 </div>
 <p>목표를 어디에 두든 가장 싼 모델은 <strong>수렴값보다 약 10% 높은 곳에서 학습을 멈추는</strong> 모델입니다. 부록 B.2의 식 (B.5)가 이것을 정확히 줍니다. 최적점에서 \(L = (1 + \alpha_N/\alpha_S)\,L(N, \infty)\)이고 \(\alpha_N/\alpha_S = 0.077/0.76 \approx 0.10\)입니다. 반대로 흔히 하듯 수렴값의 2% 안까지 돌리면, 같은 loss를 위해 파라미터는 2.7배 적게 쓰지만 스텝은 7.7배 더 쓰고 연산은 약 1/0.35 ≈ 2.9배를 씁니다(식 B.12~B.14). 논문 요약의 한 줄이 이것입니다. <strong>“수렴은 비효율적이다.”</strong></p>
@@ -566,7 +568,7 @@ function decTicks(lo,hi,maxN){var e0=Math.ceil(Math.log10(lo)-1e-9),e1=Math.floo
   for(var e=e0;e<=e1;e+=st)out.push(Math.pow(10,e));return out;}
 function frame(cv,o){
   var S=setup(cv),c=S.c,W=S.w,H=S.h,narrow=W<480;
-  var m={l:o.ml||(narrow?40:48),r:12,t:12,b:34},x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  var m={l:o.ml||(narrow?40:48),r:12,t:26,b:34},x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
   function tx(v){return o.xlog?Math.log10(v):v;} function ty(v){return o.ylog?Math.log10(v):v;}
   var ax=tx(o.x[0]),bx=tx(o.x[1]),ay=ty(o.y[0]),by=ty(o.y[1]);
   S.X=function(v){return x0+(x1-x0)*(tx(v)-ax)/(bx-ax);};
@@ -586,7 +588,7 @@ function frame(cv,o){
   c.strokeStyle=css('--axis');c.beginPath();c.moveTo(x0,y1);c.lineTo(x0,y0);c.lineTo(x1,y0);c.stroke();
   c.fillStyle=css('--text-secondary');
   if(o.xl){c.textAlign='right';c.textBaseline='bottom';c.fillText(o.xl,x1,H-1);}
-  if(o.yl){c.textAlign='left';c.textBaseline='top';var tw=c.measureText(o.yl).width;c.fillStyle=hexA(css('--surface-1').length===7?css('--surface-1'):'#fcfcfb',0.85);c.fillRect(x0+2,y1+1,tw+6,14);c.fillStyle=css('--text-secondary');c.fillText(o.yl,x0+5,y1+2);}
+  if(o.yl){c.textAlign='left';c.textBaseline='top';c.fillText(o.yl,Math.max(2,x0-(narrow?34:40)),3);}
   S.clip=function(){c.save();c.beginPath();c.rect(x0,y1,x1-x0,y0-y1);c.clip();};
   S.unclip=function(){c.restore();};
   return S;
@@ -749,7 +751,7 @@ function drawD6(){
     if(isFinite(st))dot(S,st,Lt,css('--s2'),4);
   });
   hline(S,Lt,css('--s2'),[5,4]);
-  $('#d6tab').innerHTML=rows.map(function(r,i){return '<tr'+(i===best?' class="hl"':'')+'><td>'+human(r.N)+'</td><td class="num">'+fmt(r.Linf,3)+'</td><td class="num">'+(isFinite(r.S)?(r.S>1e9?sci(r.S):Math.round(r.S).toLocaleString('en-US')):'도달 불가')+'</td><td class="num">'+(isFinite(r.E)?human(r.E):'—')+'</td><td class="num">'+(isFinite(r.C)?sci(r.C,2):'—')+'</td></tr>';}).join('');
+  $('#d6tab').innerHTML=rows.map(function(r,i){return '<tr'+(i===best?' class="hl"':'')+'><td>'+human(r.N)+'</td><td class="num">'+fmt(r.Linf,3)+'</td><td class="num">'+(isFinite(r.S)?(r.S>1e9?sci(r.S):Math.round(r.S).toLocaleString('en-US')):'불가')+'</td><td class="num">'+(isFinite(r.E)?human(r.E):'—')+'</td><td class="num">'+(isFinite(r.C)?(r.C>=1e-3&&r.C<1e4?String(+r.C.toPrecision(2)):sci(r.C,1)):'—')+'</td></tr>';}).join('');
   var Ne=Neff_for(Lt),Se=stepsTo(Ne,Lt);
   $('#d6out').innerHTML='<span>임계 배치 B<sub>crit</sub>(L)<b>'+human(Bcrit(Lt))+' 토큰</b></span>'+
     '<span>연속 최적 크기 N<sub>eff</sub> (식 B.5)<b>'+human(Ne)+'</b></span>'+
